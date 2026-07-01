@@ -1,0 +1,13 @@
+app = "gym-tracker"
+primary_region = "ewr"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+
+[[mounts]]
+  source = "gymdata"
+  destination = "/app/server"
