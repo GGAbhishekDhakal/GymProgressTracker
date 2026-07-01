@@ -10,17 +10,14 @@ export default function History() {
   const [filterExercise, setFilterExercise] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
-  const [editingId, setEditingId] = useState(null);
-  const [editWeight, setEditWeight] = useState('');
-  const [editReps, setEditReps] = useState('');
-  const [editSets, setEditSets] = useState('');
+  const [expanded, setExpanded] = useState({});
 
   function loadLogs() {
     const params = {};
     if (filterExercise) params.exercise_id = filterExercise;
     if (filterFrom) params.from = filterFrom;
     if (filterTo) params.to = filterTo;
-    params.limit = '100';
+    params.limit = '200';
 
     api.getLogs(params)
       .then(setLogs)
@@ -43,36 +40,22 @@ export default function History() {
     }
   }
 
-  function startEdit(log) {
-    setEditingId(log.id);
-    setEditWeight(log.weight.toString());
-    setEditReps(log.reps.toString());
-    setEditSets(log.sets.toString());
+  function toggleExpand(key) {
+    setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
   }
 
-  async function handleSaveEdit(id) {
-    try {
-      await api.updateLog(id, {
-        weight: parseFloat(editWeight),
-        reps: parseInt(editReps),
-        sets: parseInt(editSets),
-      });
-      setEditingId(null);
-      loadLogs();
-    } catch (err) {
-      alert(err.message);
-    }
+  const grouped = {};
+  for (const log of logs) {
+    const key = log.exercise_name || 'Unknown';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(log);
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-  }
-
-  if (loading) return <LoadingSpinner />;
+  const exerciseNames = Object.keys(grouped).sort();
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">History</h1>
+      <h1 className="text-2xl font-bold">📜 Workout History</h1>
 
       <div className="card grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div>
@@ -99,45 +82,83 @@ export default function History() {
         </div>
       </div>
 
-      {logs.length === 0 ? (
+      {loading ? <LoadingSpinner /> : logs.length === 0 ? (
         <EmptyState
           icon="📜"
           title="No logs found"
           description={filterExercise || filterFrom || filterTo ? 'Try different filters.' : 'Log your first workout to see history here.'}
         />
       ) : (
-        <div className="space-y-2">
-          {logs.map((log) => (
-            <div key={log.id} className="card !py-3 !px-4">
-              {editingId === log.id ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-gray-300 min-w-[120px]">{log.exercise_name}</span>
-                  <input type="number" step="0.5" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} className="!py-1 !px-2 w-20 text-sm" />
-                  <span className="text-gray-500 text-sm">×</span>
-                  <input type="number" value={editReps} onChange={(e) => setEditReps(e.target.value)} className="!py-1 !px-2 w-16 text-sm" />
-                  <span className="text-gray-500 text-sm">×</span>
-                  <input type="number" value={editSets} onChange={(e) => setEditSets(e.target.value)} className="!py-1 !px-2 w-16 text-sm" />
-                  <button onClick={() => handleSaveEdit(log.id)} className="btn-primary !py-1 !px-2 text-xs">Save</button>
-                  <button onClick={cancelEdit} className="btn-secondary !py-1 !px-2 text-xs">Cancel</button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="font-medium text-gray-200 min-w-[120px]">{log.exercise_name}</span>
-                    <span className="text-emerald-400 font-semibold">{log.weight}kg</span>
-                    <span className="text-gray-500">× {log.reps}</span>
-                    <span className="text-gray-500">× {log.sets}</span>
-                    {log.notes && <span className="text-gray-500 text-sm italic">— {log.notes}</span>}
+        <div className="space-y-3">
+          {exerciseNames.map(name => {
+            const exLogs = grouped[name];
+            const isOpen = expanded[name] !== false;
+
+            const dateGroups = {};
+            for (const log of exLogs) {
+              const d = log.logged_at;
+              if (!dateGroups[d]) dateGroups[d] = [];
+              dateGroups[d].push(log);
+            }
+            const dates = Object.keys(dateGroups).sort((a, b) => new Date(b) - new Date(a));
+
+            return (
+              <div key={name} className="card !p-0 overflow-hidden">
+                <button
+                  onClick={() => toggleExpand(name)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-gray-800/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                    <span className="font-semibold text-gray-200">{name}</span>
+                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">
+                      {exLogs.length} set{exLogs.length !== 1 ? 's' : ''}
+                    </span>
+                    <span className="text-xs text-gray-600">
+                      {dates.length} day{dates.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500">{new Date(log.logged_at).toLocaleDateString()}</span>
-                    <button onClick={() => startEdit(log)} className="text-xs btn-secondary !py-1 !px-2">Edit</button>
-                    <button onClick={() => handleDelete(log.id)} className="text-xs btn-danger !py-1 !px-2">Del</button>
+                </button>
+
+                {isOpen && (
+                  <div className="px-4 pb-4 space-y-3 border-t border-gray-800 pt-3">
+                    {dates.map(date => {
+                      const dayLogs = dateGroups[date];
+                      const volume = dayLogs.reduce((sum, l) => sum + (Number(l.weight) || 0) * (l.reps || 1), 0);
+                      const formatted = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+                      return (
+                        <div key={date}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-sm font-medium text-gray-400">{formatted}</span>
+                            <span className="text-xs text-gray-600">{volume.toLocaleString()}kg total</span>
+                          </div>
+                          <div className="space-y-1">
+                            {dayLogs.map((log, i) => (
+                              <div key={log.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2 group">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs text-gray-600 w-6">S{i + 1}</span>
+                                  <span className="text-emerald-400 font-semibold">{Number(log.weight).toFixed(1)}kg</span>
+                                  <span className="text-gray-500">× {log.reps}</span>
+                                  {log.notes && <span className="text-gray-600 text-xs italic">— {log.notes}</span>}
+                                </div>
+                                <button
+                                  onClick={() => handleDelete(log.id)}
+                                  className="text-xs text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

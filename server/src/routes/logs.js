@@ -131,6 +131,41 @@ router.put('/:id', async (req, res) => {
   res.json(result);
 });
 
+router.post('/batch', async (req, res) => {
+  const { entries } = req.body;
+
+  if (!entries || !Array.isArray(entries) || entries.length === 0) {
+    return res.status(400).json({ error: 'entries array is required' });
+  }
+
+  const date = entries[0].logged_at || new Date().toISOString().split('T')[0];
+
+  const formatted = entries.map(e => ({
+    exercise_id: e.exercise_id,
+    weight: e.weight,
+    reps: e.reps || 1,
+    sets: 1,
+    notes: e.notes || null,
+    logged_at: date,
+  }));
+
+  const { data: logs, error } = await supabase
+    .from('workout_logs')
+    .insert(formatted)
+    .select('*, exercises(name, muscle_group)');
+
+  if (error) throw error;
+
+  const result = (logs || []).map(l => ({
+    ...l,
+    exercise_name: l.exercises?.name,
+    muscle_group: l.exercises?.muscle_group,
+    exercises: undefined,
+  }));
+
+  res.status(201).json(result);
+});
+
 router.delete('/:id', async (req, res) => {
   const { data, error } = await supabase
     .from('workout_logs')

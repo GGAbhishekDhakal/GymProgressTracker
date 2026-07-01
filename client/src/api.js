@@ -36,6 +36,7 @@ export const api = {
     return request(`/logs${q ? `?${q}` : ''}`);
   },
   createLog: (data) => request('/logs', { method: 'POST', body: JSON.stringify(data) }),
+  createLogs: (entries) => request('/logs/batch', { method: 'POST', body: JSON.stringify({ entries }) }),
   updateLog: (id, data) => request(`/logs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteLog: (id) => request(`/logs/${id}`, { method: 'DELETE' }),
 
