@@ -22,6 +22,8 @@ export default function Dashboard() {
       setExercises(exercisesData);
       setRecentLogs(logsData);
       if (exercisesData.length) setSelectedExercise(exercisesData[0].id);
+    }).catch(() => {
+      setStats({ totalWorkouts: 0, totalEntries: 0, activeGoals: 0 });
     }).finally(() => setLoading(false));
   }, []);
 
