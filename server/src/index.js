@@ -37,13 +37,6 @@ app.get('/api/stats', async (req, res) => {
   });
 });
 
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../client/dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
-  });
-}
-
 app.use((err, req, res, next) => {
   console.error('Error:', err.message, err.code, err.stack?.split('\n')[1]);
   res.status(500).json({ error: err.message || 'Internal server error' });
@@ -54,8 +47,6 @@ process.on('unhandledRejection', (err) => {
 });
 
 app.listen(PORT, () => {
-  const url = process.env.DATABASE_URL || 'not set';
-  const masked = url.replace(/\/\/[^:]+:[^@]+@/, '//USER:PASS@');
   console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`DATABASE_URL: ${masked}`);
+  console.log(`DATABASE_URL: ${process.env.DATABASE_URL ? 'set' : 'not set'}`);
 });
