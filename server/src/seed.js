@@ -1,4 +1,4 @@
-const { getPool } = require('./db');
+const { supabase } = require('./db');
 
 const exercises = [
   { name: 'Bench Press', muscle_group: 'Chest', category: 'Barbell' },
@@ -63,31 +63,24 @@ const exercises = [
 ];
 
 async function seed() {
-  const pool = getPool();
+  const { count, error } = await supabase
+    .from('exercises')
+    .select('*', { count: 'exact', head: true });
 
-  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*) as count FROM exercises');
-  if (parseInt(count) > 0) {
+  if (error) throw error;
+
+  if (count > 0) {
     console.log('Database already seeded — skipping.');
     return;
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    for (const ex of exercises) {
-      await client.query(
-        'INSERT INTO exercises (name, muscle_group, category) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING',
-        [ex.name, ex.muscle_group, ex.category]
-      );
-    }
-    await client.query('COMMIT');
-    console.log(`Seeded ${exercises.length} exercises.`);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const { error: insErr } = await supabase
+    .from('exercises')
+    .insert(exercises);
+
+  if (insErr) throw insErr;
+
+  console.log(`Seeded ${exercises.length} exercises.`);
 }
 
 seed().catch(err => {

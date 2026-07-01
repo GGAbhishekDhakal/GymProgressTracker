@@ -1,63 +1,58 @@
 const { Router } = require('express');
-const { getPool } = require('../db');
+const { supabase } = require('../db');
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const pool = getPool();
   const { muscle_group, search } = req.query;
 
-  let query = 'SELECT * FROM exercises';
-  const params = [];
-  const conditions = [];
+  let query = supabase.from('exercises').select('*').order('muscle_group').order('name');
 
   if (muscle_group) {
-    conditions.push('muscle_group = $' + (params.length + 1));
-    params.push(muscle_group);
+    query = query.eq('muscle_group', muscle_group);
   }
 
   if (search) {
-    conditions.push('name LIKE $' + (params.length + 1));
-    params.push(`%${search}%`);
+    query = query.ilike('name', `%${search}%`);
   }
 
-  if (conditions.length) {
-    query += ' WHERE ' + conditions.join(' AND ');
-  }
-
-  query += ' ORDER BY muscle_group, name';
-
-  const { rows } = await pool.query(query, params);
-  res.json(rows);
+  const { data, error } = await query;
+  if (error) throw error;
+  res.json(data);
 });
 
 router.post('/', async (req, res) => {
-  const pool = getPool();
   const { name, muscle_group, category } = req.body;
 
   if (!name || !muscle_group) {
     return res.status(400).json({ error: 'Name and muscle_group are required' });
   }
 
-  try {
-    const { rows } = await pool.query(
-      'INSERT INTO exercises (name, muscle_group, category) VALUES ($1, $2, $3) RETURNING *',
-      [name, muscle_group, category || 'Barbell']
-    );
-    res.status(201).json(rows[0]);
-  } catch (err) {
-    if (err.code === '23505') {
+  const { data, error } = await supabase
+    .from('exercises')
+    .insert({ name, muscle_group, category: category || 'Barbell' })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
       return res.status(409).json({ error: 'Exercise already exists' });
     }
-    throw err;
+    throw error;
   }
+
+  res.status(201).json(data);
 });
 
 router.delete('/:id', async (req, res) => {
-  const pool = getPool();
-  const result = await pool.query('DELETE FROM exercises WHERE id = $1', [req.params.id]);
+  const { data, error } = await supabase
+    .from('exercises')
+    .delete()
+    .eq('id', req.params.id)
+    .select();
 
-  if (result.rowCount === 0) {
+  if (error) throw error;
+  if (!data || data.length === 0) {
     return res.status(404).json({ error: 'Exercise not found' });
   }
   res.json({ message: 'Deleted' });

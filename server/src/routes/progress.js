@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { getPool } = require('../db');
+const { supabase } = require('../db');
 
 const router = Router();
 
@@ -9,26 +9,36 @@ function epleyOneRM(weight, reps) {
 }
 
 router.get('/:exerciseId', async (req, res) => {
-  const pool = getPool();
   const { exerciseId } = req.params;
   const { days } = req.query;
 
-  const { rows: [exercise] } = await pool.query('SELECT * FROM exercises WHERE id = $1', [exerciseId]);
+  const { data: exercise, error: exErr } = await supabase
+    .from('exercises')
+    .select('*')
+    .eq('id', exerciseId)
+    .maybeSingle();
+
+  if (exErr) throw exErr;
   if (!exercise) return res.status(404).json({ error: 'Exercise not found' });
 
-  let query = 'SELECT * FROM workout_logs WHERE exercise_id = $1';
-  const params = [exerciseId];
+  let query = supabase
+    .from('workout_logs')
+    .select('*')
+    .eq('exercise_id', exerciseId);
 
   if (days) {
-    query += ' AND logged_at >= CURRENT_DATE - $2::INTERVAL';
-    params.push(`${parseInt(days)} days`);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - parseInt(days));
+    query = query.gte('logged_at', cutoff.toISOString().split('T')[0]);
   }
 
-  query += ' ORDER BY logged_at ASC, created_at ASC';
+  const { data: logs, error } = await query
+    .order('logged_at', { ascending: true })
+    .order('created_at', { ascending: true });
 
-  const { rows: logs } = await pool.query(query, params);
+  if (error) throw error;
 
-  const data = logs.map(log => ({
+  const data = (logs || []).map(log => ({
     ...log,
     estimated_one_rm: epleyOneRM(log.weight, log.reps),
   }));
@@ -37,32 +47,33 @@ router.get('/:exerciseId', async (req, res) => {
 });
 
 router.get('/', async (req, res) => {
-  const pool = getPool();
   const { days } = req.query;
 
-  let query = `
-    SELECT wl.*, e.name as exercise_name, e.muscle_group
-    FROM workout_logs wl
-    JOIN exercises e ON e.id = wl.exercise_id
-  `;
-  const params = [];
+  let query = supabase
+    .from('workout_logs')
+    .select('*, exercises(name, muscle_group)');
 
   if (days) {
-    query += ' WHERE wl.logged_at >= CURRENT_DATE - $1::INTERVAL';
-    params.push(`${parseInt(days)} days`);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - parseInt(days));
+    query = query.gte('logged_at', cutoff.toISOString().split('T')[0]);
   }
 
-  query += ' ORDER BY wl.logged_at ASC';
+  const { data: logs, error } = await query
+    .order('logged_at', { ascending: true });
 
-  const { rows: logs } = await pool.query(query, params);
+  if (error) throw error;
 
   const grouped = {};
-  for (const log of logs) {
-    const key = log.exercise_name;
+  for (const log of logs || []) {
+    const key = log.exercises?.name || 'Unknown';
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push({
       ...log,
+      exercise_name: log.exercises?.name,
+      muscle_group: log.exercises?.muscle_group,
       estimated_one_rm: epleyOneRM(log.weight, log.reps),
+      exercises: undefined,
     });
   }
 

@@ -1,112 +1,145 @@
 const { Router } = require('express');
-const { getPool } = require('../db');
+const { supabase } = require('../db');
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const pool = getPool();
   const { exercise_id, from, to, limit, offset } = req.query;
-  let query = `
-    SELECT wl.*, e.name as exercise_name, e.muscle_group, e.category
-    FROM workout_logs wl
-    JOIN exercises e ON e.id = wl.exercise_id
-  `;
-  const params = [];
-  const conditions = [];
 
-  let paramIndex = 1;
+  let query = supabase
+    .from('workout_logs')
+    .select('*, exercises(name, muscle_group, category)');
+
   if (exercise_id) {
-    conditions.push('wl.exercise_id = $' + paramIndex++);
-    params.push(exercise_id);
+    query = query.eq('exercise_id', exercise_id);
   }
   if (from) {
-    conditions.push('wl.logged_at >= $' + paramIndex++);
-    params.push(from);
+    query = query.gte('logged_at', from);
   }
   if (to) {
-    conditions.push('wl.logged_at <= $' + paramIndex++);
-    params.push(to);
+    query = query.lte('logged_at', to);
   }
 
-  if (conditions.length) {
-    query += ' WHERE ' + conditions.join(' AND ');
-  }
-
-  query += ' ORDER BY wl.logged_at DESC, wl.created_at DESC';
+  query = query
+    .order('logged_at', { ascending: false })
+    .order('created_at', { ascending: false });
 
   if (limit) {
-    query += ' LIMIT $' + paramIndex++;
-    params.push(parseInt(limit));
-    if (offset) {
-      query += ' OFFSET $' + paramIndex++;
-      params.push(parseInt(offset));
-    }
+    const lim = parseInt(limit);
+    const off = parseInt(offset || 0);
+    query = query.range(off, off + lim - 1);
   }
 
-  const { rows } = await pool.query(query, params);
-  res.json(rows);
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const result = (data || []).map(l => ({
+    ...l,
+    exercise_name: l.exercises?.name,
+    muscle_group: l.exercises?.muscle_group,
+    category: l.exercises?.category,
+    exercises: undefined,
+  }));
+
+  res.json(result);
 });
 
 router.post('/', async (req, res) => {
-  const pool = getPool();
   const { exercise_id, weight, reps, sets, notes, logged_at } = req.body;
 
   if (!exercise_id || weight === undefined) {
     return res.status(400).json({ error: 'exercise_id and weight are required' });
   }
 
-  const { rows: [exercise] } = await pool.query('SELECT id FROM exercises WHERE id = $1', [exercise_id]);
+  const { data: exercise, error: checkErr } = await supabase
+    .from('exercises')
+    .select('id')
+    .eq('id', exercise_id)
+    .maybeSingle();
+
+  if (checkErr) throw checkErr;
   if (!exercise) return res.status(404).json({ error: 'Exercise not found' });
 
   const date = logged_at || new Date().toISOString().split('T')[0];
-  const { rows } = await pool.query(
-    'INSERT INTO workout_logs (exercise_id, weight, reps, sets, notes, logged_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-    [exercise_id, weight, reps || 1, sets || 1, notes || null, date]
-  );
 
-  const log = rows[0];
-  const { rows: [withExercise] } = await pool.query(`
-    SELECT wl.*, e.name as exercise_name, e.muscle_group
-    FROM workout_logs wl
-    JOIN exercises e ON e.id = wl.exercise_id
-    WHERE wl.id = $1
-  `, [log.id]);
+  const { data: log, error } = await supabase
+    .from('workout_logs')
+    .insert({
+      exercise_id,
+      weight,
+      reps: reps || 1,
+      sets: sets || 1,
+      notes: notes || null,
+      logged_at: date,
+    })
+    .select('*, exercises(name, muscle_group)')
+    .single();
 
-  res.status(201).json(withExercise);
+  if (error) throw error;
+
+  const result = {
+    ...log,
+    exercise_name: log.exercises?.name,
+    muscle_group: log.exercises?.muscle_group,
+    exercises: undefined,
+  };
+
+  res.status(201).json(result);
 });
 
 router.put('/:id', async (req, res) => {
-  const pool = getPool();
   const { weight, reps, sets, notes, logged_at } = req.body;
 
-  const { rows: [existing] } = await pool.query('SELECT * FROM workout_logs WHERE id = $1', [req.params.id]);
+  const { data: existing, error: checkErr } = await supabase
+    .from('workout_logs')
+    .select('*')
+    .eq('id', req.params.id)
+    .maybeSingle();
+
+  if (checkErr) throw checkErr;
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
-  await pool.query(`
-    UPDATE workout_logs SET weight = $1, reps = $2, sets = $3, notes = $4, logged_at = $5 WHERE id = $6
-  `, [
-    weight !== undefined ? weight : existing.weight,
-    reps !== undefined ? reps : existing.reps,
-    sets !== undefined ? sets : existing.sets,
-    notes !== undefined ? notes : existing.notes,
-    logged_at || existing.logged_at,
-    req.params.id,
-  ]);
+  const updates = {};
+  if (weight !== undefined) updates.weight = weight;
+  if (reps !== undefined) updates.reps = reps;
+  if (sets !== undefined) updates.sets = sets;
+  if (notes !== undefined) updates.notes = notes;
+  if (logged_at !== undefined) updates.logged_at = logged_at;
 
-  const { rows: [log] } = await pool.query(`
-    SELECT wl.*, e.name as exercise_name, e.muscle_group
-    FROM workout_logs wl
-    JOIN exercises e ON e.id = wl.exercise_id
-    WHERE wl.id = $1
-  `, [req.params.id]);
+  const { error: updErr } = await supabase
+    .from('workout_logs')
+    .update(updates)
+    .eq('id', req.params.id);
 
-  res.json(log);
+  if (updErr) throw updErr;
+
+  const { data: log, error } = await supabase
+    .from('workout_logs')
+    .select('*, exercises(name, muscle_group)')
+    .eq('id', req.params.id)
+    .single();
+
+  if (error) throw error;
+
+  const result = {
+    ...log,
+    exercise_name: log.exercises?.name,
+    muscle_group: log.exercises?.muscle_group,
+    exercises: undefined,
+  };
+
+  res.json(result);
 });
 
 router.delete('/:id', async (req, res) => {
-  const pool = getPool();
-  const result = await pool.query('DELETE FROM workout_logs WHERE id = $1', [req.params.id]);
-  if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .delete()
+    .eq('id', req.params.id)
+    .select();
+
+  if (error) throw error;
+  if (!data || data.length === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ message: 'Deleted' });
 });
 

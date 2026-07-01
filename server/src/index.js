@@ -1,8 +1,7 @@
 require('express-async-errors');
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-const { getPool } = require('./db');
+const { supabase } = require('./db');
 
 const exercisesRouter = require('./routes/exercises');
 const routinesRouter = require('./routes/routines');
@@ -23,22 +22,36 @@ app.use('/api/progress', progressRouter);
 app.use('/api/goals', goalsRouter);
 
 app.get('/api/stats', async (req, res) => {
-  const pool = getPool();
-  const { rows: [totalWorkouts] } = await pool.query('SELECT COUNT(DISTINCT logged_at) as count FROM workout_logs');
-  const { rows: [totalExercises] } = await pool.query('SELECT COUNT(*) as count FROM exercises');
-  const { rows: [activeGoals] } = await pool.query("SELECT COUNT(*) as count FROM goals WHERE status = 'active'");
-  const { rows: [totalEntries] } = await pool.query('SELECT COUNT(*) as count FROM workout_logs');
+  const { data: dates } = await supabase
+    .from('workout_logs')
+    .select('logged_at')
+    .order('logged_at', { ascending: false });
+
+  const totalWorkouts = new Set((dates || []).map(d => d.logged_at)).size;
+
+  const { count: totalExercises } = await supabase
+    .from('exercises')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: activeGoals } = await supabase
+    .from('goals')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'active');
+
+  const { count: totalEntries } = await supabase
+    .from('workout_logs')
+    .select('*', { count: 'exact', head: true });
 
   res.json({
-    totalWorkouts: Number(totalWorkouts.count),
-    totalExercises: Number(totalExercises.count),
-    activeGoals: Number(activeGoals.count),
-    totalEntries: Number(totalEntries.count),
+    totalWorkouts,
+    totalExercises,
+    activeGoals,
+    totalEntries,
   });
 });
 
 app.use((err, req, res, next) => {
-  console.error('Error:', err.message, err.code, err.stack?.split('\n')[1]);
+  console.error('Error:', err);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
@@ -48,5 +61,4 @@ process.on('unhandledRejection', (err) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`DATABASE_URL: ${process.env.DATABASE_URL ? 'set' : 'not set'}`);
 });

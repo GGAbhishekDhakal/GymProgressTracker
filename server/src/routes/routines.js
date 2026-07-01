@@ -1,116 +1,157 @@
 const { Router } = require('express');
-const { getPool } = require('../db');
+const { supabase } = require('../db');
 
 const router = Router();
 
 router.get('/', async (req, res) => {
-  const pool = getPool();
-  const { rows } = await pool.query(`
-    SELECT r.*, COALESCE(STRING_AGG(re.exercise_id::text, ',' ORDER BY re.order_index), '') as exercise_ids
-    FROM routines r
-    LEFT JOIN routine_exercises re ON re.routine_id = r.id
-    GROUP BY r.id
-    ORDER BY r.name
-  `);
+  const { data, error } = await supabase
+    .from('routines')
+    .select('*, routine_exercises(exercise_id, order_index)')
+    .order('name');
 
-  const result = rows.map(r => ({
+  if (error) throw error;
+
+  const result = data.map(r => ({
     ...r,
-    exercise_ids: r.exercise_ids ? r.exercise_ids.split(',').map(Number).filter(n => !isNaN(n)) : [],
+    exercise_ids: (r.routine_exercises || [])
+      .sort((a, b) => a.order_index - b.order_index)
+      .map(re => re.exercise_id),
+    routine_exercises: undefined,
   }));
 
   res.json(result);
 });
 
 router.get('/:id', async (req, res) => {
-  const pool = getPool();
-  const { rows: [routine] } = await pool.query('SELECT * FROM routines WHERE id = $1', [req.params.id]);
+  const { data: routine, error } = await supabase
+    .from('routines')
+    .select('*')
+    .eq('id', req.params.id)
+    .maybeSingle();
+
+  if (error) throw error;
   if (!routine) return res.status(404).json({ error: 'Not found' });
 
-  const { rows: exercises } = await pool.query(`
-    SELECT e.* FROM exercises e
-    JOIN routine_exercises re ON re.exercise_id = e.id
-    WHERE re.routine_id = $1
-    ORDER BY re.order_index
-  `, [req.params.id]);
+  const { data: re } = await supabase
+    .from('routine_exercises')
+    .select('exercise_id, order_index')
+    .eq('routine_id', req.params.id)
+    .order('order_index');
 
-  res.json({ ...routine, exercises });
+  if (!re || re.length === 0) {
+    return res.json({ ...routine, exercises: [] });
+  }
+
+  const ids = re.map(r => r.exercise_id);
+
+  const { data: exercises, error: exErr } = await supabase
+    .from('exercises')
+    .select('*')
+    .in('id', ids);
+
+  if (exErr) throw exErr;
+
+  const exercisesById = {}; for (const e of exercises || []) exercisesById[e.id] = e;
+  const orderedExercises = re.map(r => exercisesById[r.exercise_id]).filter(Boolean);
+
+  res.json({ ...routine, exercises: orderedExercises });
 });
 
 router.post('/', async (req, res) => {
-  const pool = getPool();
   const { name, description, exercise_ids } = req.body;
 
   if (!name) return res.status(400).json({ error: 'Name is required' });
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const { rows } = await client.query(
-      'INSERT INTO routines (name, description) VALUES ($1, $2) RETURNING id',
-      [name, description || null]
-    );
-    const routineId = rows[0].id;
+  const { data: routine, error } = await supabase
+    .from('routines')
+    .insert({ name, description: description || null })
+    .select()
+    .single();
 
-    if (exercise_ids && exercise_ids.length) {
-      for (const [index, id] of exercise_ids.entries()) {
-        await client.query(
-          'INSERT INTO routine_exercises (routine_id, exercise_id, order_index) VALUES ($1, $2, $3)',
-          [routineId, id, index]
-        );
-      }
-    }
+  if (error) throw error;
 
-    await client.query('COMMIT');
-    const { rows: [routine] } = await pool.query('SELECT * FROM routines WHERE id = $1', [routineId]);
-    res.status(201).json(routine);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
+  if (exercise_ids && exercise_ids.length) {
+    const routineExercises = exercise_ids.map((id, index) => ({
+      routine_id: routine.id,
+      exercise_id: id,
+      order_index: index,
+    }));
+
+    const { error: reErr } = await supabase
+      .from('routine_exercises')
+      .insert(routineExercises);
+
+    if (reErr) throw reErr;
   }
+
+  res.status(201).json(routine);
 });
 
 router.put('/:id', async (req, res) => {
-  const pool = getPool();
   const { name, description, exercise_ids } = req.body;
 
-  const { rows: [existing] } = await pool.query('SELECT * FROM routines WHERE id = $1', [req.params.id]);
+  const { data: existing, error: checkErr } = await supabase
+    .from('routines')
+    .select('*')
+    .eq('id', req.params.id)
+    .maybeSingle();
+
+  if (checkErr) throw checkErr;
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(
-      'UPDATE routines SET name = $1, description = $2 WHERE id = $3',
-      [name || existing.name, description !== undefined ? description : existing.description, req.params.id]
-    );
+  const updates = {};
+  if (name !== undefined) updates.name = name;
+  if (description !== undefined) updates.description = description;
 
-    if (exercise_ids) {
-      await client.query('DELETE FROM routine_exercises WHERE routine_id = $1', [req.params.id]);
-      for (const [index, id] of exercise_ids.entries()) {
-        await client.query(
-          'INSERT INTO routine_exercises (routine_id, exercise_id, order_index) VALUES ($1, $2, $3)',
-          [req.params.id, id, index]
-        );
-      }
-    }
+  if (Object.keys(updates).length > 0) {
+    const { error: updErr } = await supabase
+      .from('routines')
+      .update(updates)
+      .eq('id', req.params.id);
 
-    await client.query('COMMIT');
-    const { rows: [routine] } = await pool.query('SELECT * FROM routines WHERE id = $1', [req.params.id]);
-    res.json(routine);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
+    if (updErr) throw updErr;
   }
+
+  if (exercise_ids) {
+    const { error: delErr } = await supabase
+      .from('routine_exercises')
+      .delete()
+      .eq('routine_id', req.params.id);
+
+    if (delErr) throw delErr;
+
+    const routineExercises = exercise_ids.map((id, index) => ({
+      routine_id: parseInt(req.params.id),
+      exercise_id: id,
+      order_index: index,
+    }));
+
+    const { error: insErr } = await supabase
+      .from('routine_exercises')
+      .insert(routineExercises);
+
+    if (insErr) throw insErr;
+  }
+
+  const { data: routine, error } = await supabase
+    .from('routines')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
+
+  if (error) throw error;
+  res.json(routine);
 });
 
 router.delete('/:id', async (req, res) => {
-  const pool = getPool();
-  const result = await pool.query('DELETE FROM routines WHERE id = $1', [req.params.id]);
-  if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+  const { data, error } = await supabase
+    .from('routines')
+    .delete()
+    .eq('id', req.params.id)
+    .select();
+
+  if (error) throw error;
+  if (!data || data.length === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ message: 'Deleted' });
 });
 
