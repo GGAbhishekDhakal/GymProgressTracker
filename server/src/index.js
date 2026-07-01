@@ -45,8 +45,8 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
+  console.error('Error:', err.message, err.code, err.stack?.split('\n')[1]);
+  res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
 process.on('unhandledRejection', (err) => {
@@ -54,5 +54,8 @@ process.on('unhandledRejection', (err) => {
 });
 
 app.listen(PORT, () => {
+  const url = process.env.DATABASE_URL || 'not set';
+  const masked = url.replace(/\/\/[^:]+:[^@]+@/, '//USER:PASS@');
   console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`DATABASE_URL: ${masked}`);
 });
