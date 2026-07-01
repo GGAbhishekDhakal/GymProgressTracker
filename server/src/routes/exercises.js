@@ -1,10 +1,10 @@
 const { Router } = require('express');
-const { getDb } = require('../db');
+const { getPool } = require('../db');
 
 const router = Router();
 
-router.get('/', (req, res) => {
-  const db = getDb();
+router.get('/', async (req, res) => {
+  const pool = getPool();
   const { muscle_group, search } = req.query;
 
   let query = 'SELECT * FROM exercises';
@@ -12,12 +12,12 @@ router.get('/', (req, res) => {
   const conditions = [];
 
   if (muscle_group) {
-    conditions.push('muscle_group = ?');
+    conditions.push('muscle_group = $' + (params.length + 1));
     params.push(muscle_group);
   }
 
   if (search) {
-    conditions.push('name LIKE ?');
+    conditions.push('name LIKE $' + (params.length + 1));
     params.push(`%${search}%`);
   }
 
@@ -27,12 +27,12 @@ router.get('/', (req, res) => {
 
   query += ' ORDER BY muscle_group, name';
 
-  const exercises = db.prepare(query).all(...params);
-  res.json(exercises);
+  const { rows } = await pool.query(query, params);
+  res.json(rows);
 });
 
-router.post('/', (req, res) => {
-  const db = getDb();
+router.post('/', async (req, res) => {
+  const pool = getPool();
   const { name, muscle_group, category } = req.body;
 
   if (!name || !muscle_group) {
@@ -40,25 +40,24 @@ router.post('/', (req, res) => {
   }
 
   try {
-    const result = db.prepare(
-      'INSERT INTO exercises (name, muscle_group, category) VALUES (?, ?, ?)'
-    ).run(name, muscle_group, category || 'Barbell');
-
-    const exercise = db.prepare('SELECT * FROM exercises WHERE id = ?').get(result.lastInsertRowid);
-    res.status(201).json(exercise);
+    const { rows } = await pool.query(
+      'INSERT INTO exercises (name, muscle_group, category) VALUES ($1, $2, $3) RETURNING *',
+      [name, muscle_group, category || 'Barbell']
+    );
+    res.status(201).json(rows[0]);
   } catch (err) {
-    if (err.message.includes('UNIQUE')) {
+    if (err.code === '23505') {
       return res.status(409).json({ error: 'Exercise already exists' });
     }
     throw err;
   }
 });
 
-router.delete('/:id', (req, res) => {
-  const db = getDb();
-  const result = db.prepare('DELETE FROM exercises WHERE id = ?').run(req.params.id);
+router.delete('/:id', async (req, res) => {
+  const pool = getPool();
+  const result = await pool.query('DELETE FROM exercises WHERE id = $1', [req.params.id]);
 
-  if (result.changes === 0) {
+  if (result.rowCount === 0) {
     return res.status(404).json({ error: 'Exercise not found' });
   }
   res.json({ message: 'Deleted' });

@@ -1,32 +1,32 @@
 const { Router } = require('express');
-const { getDb } = require('../db');
+const { getPool } = require('../db');
 
 const router = Router();
 
 function epleyOneRM(weight, reps) {
-  if (reps <= 1) return weight;
-  return Math.round(weight * (1 + reps / 30) * 10) / 10;
+  if (reps <= 1) return Number(weight);
+  return Math.round(Number(weight) * (1 + reps / 30) * 10) / 10;
 }
 
-router.get('/:exerciseId', (req, res) => {
-  const db = getDb();
+router.get('/:exerciseId', async (req, res) => {
+  const pool = getPool();
   const { exerciseId } = req.params;
   const { days } = req.query;
 
-  const exercise = db.prepare('SELECT * FROM exercises WHERE id = ?').get(exerciseId);
+  const { rows: [exercise] } = await pool.query('SELECT * FROM exercises WHERE id = $1', [exerciseId]);
   if (!exercise) return res.status(404).json({ error: 'Exercise not found' });
 
-  let query = 'SELECT * FROM workout_logs WHERE exercise_id = ?';
+  let query = 'SELECT * FROM workout_logs WHERE exercise_id = $1';
   const params = [exerciseId];
 
   if (days) {
-    query += ' AND logged_at >= date("now", ?)';
-    params.push(`-${parseInt(days)} days`);
+    query += ' AND logged_at >= CURRENT_DATE - $2::INTERVAL';
+    params.push(`${parseInt(days)} days`);
   }
 
   query += ' ORDER BY logged_at ASC, created_at ASC';
 
-  const logs = db.prepare(query).all(...params);
+  const { rows: logs } = await pool.query(query, params);
 
   const data = logs.map(log => ({
     ...log,
@@ -36,8 +36,8 @@ router.get('/:exerciseId', (req, res) => {
   res.json({ exercise, data });
 });
 
-router.get('/', (req, res) => {
-  const db = getDb();
+router.get('/', async (req, res) => {
+  const pool = getPool();
   const { days } = req.query;
 
   let query = `
@@ -48,13 +48,13 @@ router.get('/', (req, res) => {
   const params = [];
 
   if (days) {
-    query += ' WHERE wl.logged_at >= date("now", ?)';
-    params.push(`-${parseInt(days)} days`);
+    query += ' WHERE wl.logged_at >= CURRENT_DATE - $1::INTERVAL';
+    params.push(`${parseInt(days)} days`);
   }
 
   query += ' ORDER BY wl.logged_at ASC';
 
-  const logs = db.prepare(query).all(...params);
+  const { rows: logs } = await pool.query(query, params);
 
   const grouped = {};
   for (const log of logs) {

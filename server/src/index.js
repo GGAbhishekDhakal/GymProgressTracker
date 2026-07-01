@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { getDb } = require('./db');
+const { getPool } = require('./db');
 
 const exercisesRouter = require('./routes/exercises');
 const routinesRouter = require('./routes/routines');
@@ -21,18 +21,18 @@ app.use('/api/logs', logsRouter);
 app.use('/api/progress', progressRouter);
 app.use('/api/goals', goalsRouter);
 
-app.get('/api/stats', (req, res) => {
-  const db = getDb();
-  const totalWorkouts = db.prepare('SELECT COUNT(DISTINCT logged_at) as count FROM workout_logs').get();
-  const totalExercises = db.prepare('SELECT COUNT(*) as count FROM exercises').get();
-  const activeGoals = db.prepare("SELECT COUNT(*) as count FROM goals WHERE status = 'active'").get();
-  const totalEntries = db.prepare('SELECT COUNT(*) as count FROM workout_logs').get();
+app.get('/api/stats', async (req, res) => {
+  const pool = getPool();
+  const { rows: [totalWorkouts] } = await pool.query('SELECT COUNT(DISTINCT logged_at) as count FROM workout_logs');
+  const { rows: [totalExercises] } = await pool.query('SELECT COUNT(*) as count FROM exercises');
+  const { rows: [activeGoals] } = await pool.query("SELECT COUNT(*) as count FROM goals WHERE status = 'active'");
+  const { rows: [totalEntries] } = await pool.query('SELECT COUNT(*) as count FROM workout_logs');
 
   res.json({
-    totalWorkouts: totalWorkouts.count,
-    totalExercises: totalExercises.count,
-    activeGoals: activeGoals.count,
-    totalEntries: totalEntries.count,
+    totalWorkouts: Number(totalWorkouts.count),
+    totalExercises: Number(totalExercises.count),
+    activeGoals: Number(activeGoals.count),
+    totalEntries: Number(totalEntries.count),
   });
 });
 

@@ -1,4 +1,4 @@
-const { getDb } = require('./db');
+const { getPool } = require('./db');
 
 const exercises = [
   { name: 'Bench Press', muscle_group: 'Chest', category: 'Barbell' },
@@ -62,27 +62,35 @@ const exercises = [
   { name: 'Side Plank', muscle_group: 'Core', category: 'Bodyweight' },
 ];
 
-function seed() {
-  const db = getDb();
+async function seed() {
+  const pool = getPool();
 
-  const existing = db.prepare('SELECT COUNT(*) as count FROM exercises').get();
-  if (existing.count > 0) {
+  const { rows: [{ count }] } = await pool.query('SELECT COUNT(*) as count FROM exercises');
+  if (parseInt(count) > 0) {
     console.log('Database already seeded — skipping.');
     return;
   }
 
-  const insert = db.prepare(
-    'INSERT INTO exercises (name, muscle_group, category) VALUES (@name, @muscle_group, @category)'
-  );
-
-  const tx = db.transaction(() => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
     for (const ex of exercises) {
-      insert.run(ex);
+      await client.query(
+        'INSERT INTO exercises (name, muscle_group, category) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING',
+        [ex.name, ex.muscle_group, ex.category]
+      );
     }
-  });
-
-  tx();
-  console.log(`Seeded ${exercises.length} exercises.`);
+    await client.query('COMMIT');
+    console.log(`Seeded ${exercises.length} exercises.`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-seed();
+seed().catch(err => {
+  console.error('Seed failed:', err);
+  process.exit(1);
+});
