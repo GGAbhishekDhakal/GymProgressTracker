@@ -3,6 +3,15 @@ import { api } from '../api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
+const muscleStyle = {
+  Chest: { border: 'border-l-red-500/40', emoji: '🦍', row: 'border-l-2 border-l-red-500/20' },
+  Back: { border: 'border-l-emerald-500/40', emoji: '🔱', row: 'border-l-2 border-l-emerald-500/20' },
+  Shoulders: { border: 'border-l-orange-500/40', emoji: '🏔️', row: 'border-l-2 border-l-orange-500/20' },
+  Legs: { border: 'border-l-blue-500/40', emoji: '🦵', row: 'border-l-2 border-l-blue-500/20' },
+  Arms: { border: 'border-l-purple-500/40', emoji: '💪', row: 'border-l-2 border-l-purple-500/20' },
+  Core: { border: 'border-l-yellow-500/40', emoji: '🔥', row: 'border-l-2 border-l-yellow-500/20' },
+};
+
 export default function History() {
   const [logs, setLogs] = useState([]);
   const [exercises, setExercises] = useState([]);
@@ -102,14 +111,18 @@ export default function History() {
             }
             const dates = Object.keys(dateGroups).sort((a, b) => new Date(b) - new Date(a));
 
+            const logMuscle = exLogs[0]?.muscle_group;
+            const mStyle = muscleStyle[logMuscle] || { border: 'border-l-gray-600', emoji: '•' };
+
             return (
-              <div key={name} className="card !p-0 overflow-hidden">
+              <div key={name} className={`card !p-0 overflow-hidden border-l-4 ${mStyle.border}`}>
                 <button
                   onClick={() => toggleExpand(name)}
                   className="w-full flex items-center justify-between p-4 hover:bg-gray-800/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <span className={`transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                    <span className="text-lg">{mStyle.emoji}</span>
                     <span className="font-semibold text-gray-200">{name}</span>
                     <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">
                       {exLogs.length} set{exLogs.length !== 1 ? 's' : ''}
@@ -135,7 +148,7 @@ export default function History() {
                           </div>
                           <div className="space-y-1">
                             {dayLogs.map((log, i) => (
-                              <div key={log.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2 group">
+                              <div key={log.id} className={`flex items-center justify-between ${muscleStyle[log.muscle_group]?.row || 'border-l-2 border-l-gray-800'} bg-gray-800/50 rounded-lg px-3 py-2 group`}>
                                 <div className="flex items-center gap-3">
                                   <span className="text-xs text-gray-600 w-6">S{i + 1}</span>
                                   <span className="text-emerald-400 font-semibold">{Number(log.weight).toFixed(1)}kg</span>

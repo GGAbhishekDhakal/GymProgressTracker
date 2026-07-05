@@ -6,12 +6,12 @@ import EmptyState from '../components/EmptyState';
 
 const muscleGroups = ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'];
 const muscleColors = {
-  Chest: 'border-l-red-500/50',
-  Back: 'border-l-emerald-500/50',
-  Shoulders: 'border-l-orange-500/50',
-  Legs: 'border-l-blue-500/50',
-  Arms: 'border-l-purple-500/50',
-  Core: 'border-l-yellow-500/50',
+  Chest: { border: 'border-l-red-500/50', emoji: '🦍', text: 'text-red-400' },
+  Back: { border: 'border-l-emerald-500/50', emoji: '🔱', text: 'text-emerald-400' },
+  Shoulders: { border: 'border-l-orange-500/50', emoji: '🏔️', text: 'text-orange-400' },
+  Legs: { border: 'border-l-blue-500/50', emoji: '🦵', text: 'text-blue-400' },
+  Arms: { border: 'border-l-purple-500/50', emoji: '💪', text: 'text-purple-400' },
+  Core: { border: 'border-l-yellow-500/50', emoji: '🔥', text: 'text-yellow-400' },
 };
 
 export default function Routines() {
@@ -157,7 +157,8 @@ export default function Routines() {
                 if (groupExs.length === 0) return null;
                 return (
                   <div key={group}>
-                    <div className={`flex items-center gap-2 border-l-4 ${muscleColors[group] || 'border-l-gray-600'} pl-2 mb-1`}>
+                    <div className={`flex items-center gap-2 border-l-4 ${(muscleColors[group]?.border) || 'border-l-gray-600'} pl-2 mb-1`}>
+                      <span>{muscleColors[group]?.emoji || '•'}</span>
                       <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{group}</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
@@ -255,13 +256,14 @@ export default function Routines() {
                 <div className="space-y-2">
                   {Object.entries(grouped).map(([group, exs]) => (
                     <div key={group}>
-                      <div className={`flex items-center gap-1 border-l-4 ${muscleColors[group] || 'border-l-gray-600'} pl-2 mb-1`}>
+                      <div className={`flex items-center gap-1 border-l-4 ${(muscleColors[group]?.border) || 'border-l-gray-600'} pl-2 mb-1`}>
+                        <span className="text-xs">{muscleColors[group]?.emoji || '•'}</span>
                         <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">{group}</span>
                         <span className="text-[10px] text-gray-700">({exs.length})</span>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {exs.map(ex => (
-                          <span key={ex.id} className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">
+                          <span key={ex.id} className={`text-xs px-2 py-0.5 rounded-full bg-gray-800 ${muscleColors[group]?.text || 'text-gray-400'}`}>
                             {ex.name}
                           </span>
                         ))}

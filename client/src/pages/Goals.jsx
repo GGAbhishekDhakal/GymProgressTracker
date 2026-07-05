@@ -73,7 +73,7 @@ export default function Goals() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Goals</h1>
+        <h1 className="text-2xl font-bold">🎯 Goals</h1>
         <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">
           {showForm ? 'Cancel' : '+ New Goal'}
         </button>

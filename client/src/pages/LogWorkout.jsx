@@ -7,12 +7,12 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 const muscleGroups = ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'];
 const muscleColors = {
-  Chest: 'border-l-red-500/50',
-  Back: 'border-l-emerald-500/50',
-  Shoulders: 'border-l-orange-500/50',
-  Legs: 'border-l-blue-500/50',
-  Arms: 'border-l-purple-500/50',
-  Core: 'border-l-yellow-500/50',
+  Chest: { border: 'border-l-red-500/50', emoji: '🦍' },
+  Back: { border: 'border-l-emerald-500/50', emoji: '🔱' },
+  Shoulders: { border: 'border-l-orange-500/50', emoji: '🏔️' },
+  Legs: { border: 'border-l-blue-500/50', emoji: '🦵' },
+  Arms: { border: 'border-l-purple-500/50', emoji: '💪' },
+  Core: { border: 'border-l-yellow-500/50', emoji: '🔥' },
 };
 
 export default function LogWorkout() {
@@ -146,11 +146,14 @@ export default function LogWorkout() {
       )}
 
       {mode === 'routine' && routineStep >= 0 && currentRoutineEx && (
-        <div className="card border-l-4 border-emerald-500">
+        <div className={`card border-l-4 ${muscleColors[currentRoutineEx.muscle_group]?.border || 'border-l-emerald-500'}`}>
           <div className="flex items-center justify-between mb-2">
             <div>
               <span className="text-xs text-gray-500 uppercase tracking-wider">Step {routineStep + 1} of {routineExercises.length}</span>
-              <h2 className="text-xl font-bold text-gray-200">{currentRoutineEx.name}</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{muscleColors[currentRoutineEx.muscle_group]?.emoji || '💪'}</span>
+                <h2 className="text-xl font-bold text-gray-200">{currentRoutineEx.name}</h2>
+              </div>
               <span className="text-sm text-gray-500">{currentRoutineEx.muscle_group} · {currentRoutineEx.category}</span>
             </div>
             <div className="flex flex-wrap gap-1 max-w-[120px]">
@@ -215,7 +218,8 @@ export default function LogWorkout() {
             <div className="space-y-4 max-h-[500px] overflow-y-auto">
               {groupedExercises.map(group => (
                 <div key={group.label}>
-                  <div className={`flex items-center gap-2 mb-2 border-l-4 ${muscleColors[group.label] || 'border-l-gray-600'} pl-3`}>
+                  <div className={`flex items-center gap-2 mb-2 border-l-4 ${muscleColors[group.label]?.border || 'border-l-gray-600'} pl-3`}>
+                    <span className="text-xs">{muscleColors[group.label]?.emoji || '•'}</span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{group.label}</span>
                     <span className="text-[10px] text-gray-700">({group.items.length})</span>
                   </div>

@@ -5,40 +5,62 @@
 @layer base {
   body {
     @apply bg-gray-950 text-gray-100 antialiased;
+    background-image: radial-gradient(ellipse at 20% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
+                      radial-gradient(ellipse at 80% 50%, rgba(52, 211, 153, 0.02) 0%, transparent 50%);
   }
 
   input, select, textarea {
-    @apply bg-gray-800 border-gray-700 text-gray-100 rounded-lg px-3 py-2 w-full;
+    @apply bg-gray-800/80 border-gray-700/80 text-gray-100 rounded-lg px-3 py-2 w-full backdrop-blur-sm;
   }
 
   input:focus, select:focus, textarea:focus {
-    @apply outline-none ring-2 ring-emerald-500 border-emerald-500;
+    @apply outline-none ring-2 ring-emerald-500/60 border-emerald-500;
   }
 
   label {
     @apply text-sm font-medium text-gray-400 mb-1 block;
   }
+
+  ::-webkit-scrollbar { @apply w-1.5; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-gray-800 rounded-full hover:bg-gray-700; }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20;
   }
 
   .btn-secondary {
-    @apply bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold px-4 py-2 rounded-lg transition-colors;
+    @apply bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 font-semibold px-4 py-2 rounded-lg transition-all duration-200 backdrop-blur-sm;
   }
 
   .btn-danger {
-    @apply bg-red-600 hover:bg-red-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors;
+    @apply bg-red-600/90 hover:bg-red-500 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-200;
   }
 
   .card {
-    @apply bg-gray-900 border border-gray-800 rounded-xl p-4;
+    @apply bg-gray-900/80 border border-gray-800/80 rounded-xl p-4 backdrop-blur-sm transition-all duration-200;
+  }
+
+  .card:hover {
+    @apply border-gray-700/80 shadow-lg shadow-black/10;
+  }
+
+  .card-glass {
+    @apply bg-gray-900/40 border border-gray-800/60 rounded-xl p-4 backdrop-blur-xl transition-all duration-200;
+  }
+
+  .card-glass:hover {
+    @apply bg-gray-900/50 border-gray-700/60 shadow-xl shadow-black/10;
   }
 
   .stat-card {
-    @apply bg-gray-900 border border-gray-800 rounded-xl p-4 text-center;
+    @apply card text-center;
+  }
+
+  .stat-card:hover {
+    @apply -translate-y-0.5 shadow-emerald-900/10;
   }
 
   .stat-value {
@@ -65,23 +87,18 @@
   to   { opacity: 1; transform: scale(1); }
 }
 
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
 .stat-card {
   animation: fadeInUp 0.4s ease-out both;
 }
-
 .stat-card:nth-child(1) { animation-delay: 0.05s; }
 .stat-card:nth-child(2) { animation-delay: 0.1s; }
 .stat-card:nth-child(3) { animation-delay: 0.15s; }
 .stat-card:nth-child(4) { animation-delay: 0.2s; }
-
-.stat-value {
-  animation: countUp 0.4s ease-out 0.3s both;
-}
-
-.animate-glow {
-  animation: pulseGlow 2s infinite;
-}
-
-.card {
-  animation: fadeInUp 0.3s ease-out both;
-}
+.stat-value { animation: countUp 0.4s ease-out 0.3s both; }
+.card { animation: fadeInUp 0.3s ease-out both; }
+.animate-glow { animation: pulseGlow 2s infinite; }
