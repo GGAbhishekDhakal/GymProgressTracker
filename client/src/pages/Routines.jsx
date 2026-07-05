@@ -6,20 +6,32 @@ import EmptyState from '../components/EmptyState';
 
 const muscleGroups = ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'];
 const muscleColors = {
-  Chest: { border: 'border-l-red-500/50', emoji: '🦍', text: 'text-red-400' },
-  Back: { border: 'border-l-emerald-500/50', emoji: '🔱', text: 'text-emerald-400' },
-  Shoulders: { border: 'border-l-orange-500/50', emoji: '🏔️', text: 'text-orange-400' },
-  Legs: { border: 'border-l-blue-500/50', emoji: '🦵', text: 'text-blue-400' },
-  Arms: { border: 'border-l-purple-500/50', emoji: '💪', text: 'text-purple-400' },
-  Core: { border: 'border-l-yellow-500/50', emoji: '🔥', text: 'text-yellow-400' },
+  Chest: { border: 'border-l-red-500/50', emoji: '🦍', text: 'text-red-400', bg: 'bg-red-500/10' },
+  Back: { border: 'border-l-emerald-500/50', emoji: '🔱', text: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  Shoulders: { border: 'border-l-orange-500/50', emoji: '🏔️', text: 'text-orange-400', bg: 'bg-orange-500/10' },
+  Legs: { border: 'border-l-blue-500/50', emoji: '🦵', text: 'text-blue-400', bg: 'bg-blue-500/10' },
+  Arms: { border: 'border-l-purple-500/50', emoji: '💪', text: 'text-purple-400', bg: 'bg-purple-500/10' },
+  Core: { border: 'border-l-yellow-500/50', emoji: '🔥', text: 'text-yellow-400', bg: 'bg-yellow-500/10' },
 };
+
+const templates = [
+  { name: 'Push Day', description: 'Chest · Shoulders', groups: ['Chest', 'Shoulders'], emoji: '🔥', gradient: 'from-red-600/20 to-orange-600/10' },
+  { name: 'Pull Day', description: 'Back · Arms', groups: ['Back', 'Arms'], emoji: '💪', gradient: 'from-emerald-600/20 to-purple-600/10' },
+  { name: 'Legs Day', description: 'Quads · Hamstrings · Glutes', groups: ['Legs'], emoji: '🦵', gradient: 'from-blue-600/20 to-cyan-600/10' },
+  { name: 'Full Body', description: 'All muscle groups', groups: ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'], emoji: '💯', gradient: 'from-emerald-600/20 to-yellow-600/10' },
+  { name: 'Chest + Triceps', description: 'Chest · Arms (Triceps)', groups: ['Chest', 'Arms'], emoji: '🦍', gradient: 'from-red-600/20 to-purple-600/10' },
+  { name: 'Back + Biceps', description: 'Back · Arms (Biceps)', groups: ['Back', 'Arms'], emoji: '🔱', gradient: 'from-emerald-600/20 to-purple-600/10' },
+  { name: 'Upper Body', description: 'Chest · Back · Shoulders · Arms', groups: ['Chest', 'Back', 'Shoulders', 'Arms'], emoji: '🏋️', gradient: 'from-red-600/20 via-emerald-600/10 to-purple-600/10' },
+];
 
 export default function Routines() {
   const navigate = useNavigate();
   const [routines, setRoutines] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showPicker, setShowPicker] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [editRoutine, setEditRoutine] = useState(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedExercises, setSelectedExercises] = useState([]);
@@ -34,30 +46,74 @@ export default function Routines() {
 
   useEffect(() => { loadData(); }, []);
 
-  function startCreate() {
-    setEditing('new');
-    setName('');
-    setDescription('');
-    setSelectedExercises([]);
-    setExerciseOrder([]);
+  function applyTemplate(template) {
+    const ids = exercises
+      .filter(e => template.groups.includes(e.muscle_group))
+      .map(e => e.id);
+    setName(template.name);
+    setDescription(template.description);
+    setSelectedExercises(ids);
+    setExerciseOrder(ids);
+    setShowPicker(false);
+    setEditing(editRoutine ? editRoutine.id : 'new');
   }
 
-  function startEdit(routine) {
-    setEditing(routine.id);
-    setName(routine.name);
-    setDescription(routine.description || '');
-    setSelectedExercises(routine.exercise_ids || []);
-    setExerciseOrder(routine.exercise_ids || []);
-  }
-
-  function cancelEdit() {
+  function openCreate() {
+    setShowPicker(true);
+    setEditRoutine(null);
     setEditing(null);
+  }
+
+  function openEdit(routine) {
+    setShowPicker(true);
+    setEditRoutine(routine);
+    setEditing(null);
+  }
+
+  function skipPicker() {
+    if (editRoutine) {
+      setName(editRoutine.name);
+      setDescription(editRoutine.description || '');
+      setSelectedExercises(editRoutine.exercise_ids || []);
+      setExerciseOrder(editRoutine.exercise_ids || []);
+      setEditing(editRoutine.id);
+    } else {
+      setName('');
+      setDescription('');
+      setSelectedExercises([]);
+      setExerciseOrder([]);
+      setEditing('new');
+    }
+    setShowPicker(false);
+  }
+
+  function goBackToPicker() {
+    setShowPicker(true);
+  }
+
+  function cancelAll() {
+    setShowPicker(false);
+    setEditing(null);
+    setEditRoutine(null);
     setShowMenu(null);
   }
 
   function toggleExercise(id) {
     setSelectedExercises(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      setExerciseOrder(next);
+      return next;
+    });
+  }
+
+  function toggleGroup(group) {
+    const groupIds = exercises
+      .filter(e => e.muscle_group === group)
+      .map(e => e.id);
+    const allSelected = groupIds.every(id => selectedExercises.includes(id));
+    setSelectedExercises(prev => {
+      const filtered = prev.filter(id => !groupIds.includes(id));
+      const next = allSelected ? filtered : [...filtered, ...groupIds];
       setExerciseOrder(next);
       return next;
     });
@@ -86,7 +142,7 @@ export default function Routines() {
       } else {
         await api.updateRoutine(editing, { name: name.trim(), description: description.trim() || undefined, exercise_ids: exerciseOrder });
       }
-      cancelEdit();
+      cancelAll();
       loadData();
     } catch (err) {
       alert(err.message);
@@ -103,14 +159,6 @@ export default function Routines() {
     }
   }
 
-  function getExerciseName(id) {
-    return exercises.find(e => e.id === id)?.name || 'Unknown';
-  }
-
-  function getExerciseGroup(id) {
-    return exercises.find(e => e.id === id)?.muscle_group || '';
-  }
-
   function handleStartRoutine(id) {
     navigate(`/log?routine=${id}`);
   }
@@ -118,17 +166,60 @@ export default function Routines() {
   if (loading) return <LoadingSpinner />;
 
   const orderedExercises = editing ? exerciseOrder : [];
+  const selectedSet = new Set(selectedExercises);
+
+  function groupSelectedCount(group) {
+    return exercises.filter(e => e.muscle_group === group && selectedSet.has(e.id)).length;
+  }
+
+  function groupTotalCount(group) {
+    return exercises.filter(e => e.muscle_group === group).length;
+  }
+
+  function groupAllSelected(group) {
+    return groupTotalCount(group) > 0 && groupSelectedCount(group) === groupTotalCount(group);
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">📋 My Routines</h1>
-        {editing !== 'new' && (
-          <button onClick={startCreate} className="btn-primary text-sm flex items-center gap-1">
+        {!showPicker && editing !== 'new' && !editing && (
+          <button onClick={openCreate} className="btn-primary text-sm flex items-center gap-1">
             <span>+</span> Create Routine
           </button>
         )}
       </div>
+
+      {showPicker && (
+        <div className="card border-emerald-800/30">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-200">
+              {editRoutine ? '✏️ Edit Routine' : '🏗️ New Routine'}
+            </h2>
+            <button onClick={cancelAll} className="text-sm text-gray-500 hover:text-gray-300">Cancel</button>
+          </div>
+          <p className="text-sm text-gray-400 mb-4">Start from a template or build your own</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {templates.map(t => (
+              <button
+                key={t.name}
+                onClick={() => applyTemplate(t)}
+                className={`text-left p-3 rounded-xl bg-gradient-to-br ${t.gradient} border border-gray-700/50 hover:border-emerald-700/50 hover:scale-[1.02] hover:-translate-y-0.5 transition-all duration-200 group`}
+              >
+                <div className="text-xl mb-1">{t.emoji}</div>
+                <div className="font-semibold text-sm text-gray-200 group-hover:text-emerald-400">{t.name}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">{t.description}</div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 text-center">
+            <button onClick={skipPicker} className="text-sm text-gray-500 hover:text-gray-300">
+              ✏️ Custom — start from scratch
+            </button>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <form onSubmit={handleSave} className="card space-y-4 border-emerald-800/30">
@@ -136,7 +227,7 @@ export default function Routines() {
             <h2 className="text-lg font-semibold text-gray-200">
               {editing === 'new' ? '🏗️ New Routine' : '✏️ Edit Routine'}
             </h2>
-            <button type="button" onClick={cancelEdit} className="text-sm text-gray-500 hover:text-gray-300">Cancel</button>
+            <button type="button" onClick={cancelAll} className="text-sm text-gray-500 hover:text-gray-300">Cancel</button>
           </div>
 
           <div>
@@ -150,29 +241,45 @@ export default function Routines() {
           </div>
 
           <div>
-            <label>Exercises ({selectedExercises.length} selected)</label>
-            <div className="mt-2 space-y-3 max-h-64 overflow-y-auto">
+            <div className="flex items-center justify-between mb-2">
+              <label>Exercises ({selectedExercises.length} selected)</label>
+              <button type="button" onClick={goBackToPicker} className="text-xs text-emerald-500 hover:text-emerald-400">← Pick template</button>
+            </div>
+            <div className="mt-2 space-y-3 max-h-72 overflow-y-auto">
               {muscleGroups.map(group => {
                 const groupExs = exercises.filter(e => e.muscle_group === group);
                 if (groupExs.length === 0) return null;
+                const sel = groupSelectedCount(group);
+                const total = groupTotalCount(group);
+                const allSel = groupAllSelected(group);
+                const mc = muscleColors[group];
                 return (
                   <div key={group}>
-                    <div className={`flex items-center gap-2 border-l-4 ${(muscleColors[group]?.border) || 'border-l-gray-600'} pl-2 mb-1`}>
-                      <span>{muscleColors[group]?.emoji || '•'}</span>
-                      <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{group}</span>
+                    <div
+                      className={`flex items-center justify-between gap-2 border-l-4 ${mc?.border || 'border-l-gray-600'} pl-2 mb-1 cursor-pointer hover:opacity-80 transition-opacity`}
+                      onClick={() => toggleGroup(group)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{mc?.emoji || '•'}</span>
+                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{group}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${allSel ? `${mc?.bg} ${mc?.text}` : 'text-gray-700 bg-gray-800'}`}>
+                          {sel}/{total}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-gray-600">{allSel ? '✓ All' : 'Tap to toggle'}</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                       {groupExs.map(ex => (
                         <label key={ex.id} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer transition-colors ${
-                          selectedExercises.includes(ex.id) ? 'bg-emerald-600/10 ring-1 ring-emerald-600/30' : 'hover:bg-gray-800'
+                          selectedSet.has(ex.id) ? `${mc?.bg} ring-1 ring-emerald-600/30` : 'hover:bg-gray-800'
                         }`}>
                           <input
                             type="checkbox"
-                            checked={selectedExercises.includes(ex.id)}
+                            checked={selectedSet.has(ex.id)}
                             onChange={() => toggleExercise(ex.id)}
                             className="rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500"
                           />
-                          <span className="text-sm text-gray-300">{ex.name}</span>
+                          <span className={`text-sm ${selectedSet.has(ex.id) ? 'text-gray-200' : 'text-gray-400'}`}>{ex.name}</span>
                         </label>
                       ))}
                     </div>
@@ -188,11 +295,13 @@ export default function Routines() {
               <div className="mt-1 space-y-1">
                 {orderedExercises.map((id, i) => {
                   const ex = exercises.find(e => e.id === id);
+                  const mc = muscleColors[ex?.muscle_group];
                   return (
                     <div key={id} className="flex items-center gap-2 bg-gray-800/50 rounded-lg px-3 py-2">
                       <span className="text-xs text-gray-600 w-6">{i + 1}</span>
+                      <span className="text-xs mr-1">{mc?.emoji || '•'}</span>
                       <span className="flex-1 text-sm text-gray-200">{ex?.name}</span>
-                      <span className="text-[10px] text-gray-600 w-16">{ex?.muscle_group}</span>
+                      <span className={`text-[10px] ${mc?.text || 'text-gray-600'} w-16`}>{ex?.muscle_group}</span>
                       <button type="button" onClick={() => moveUp(i)} disabled={i === 0} className="text-gray-600 hover:text-gray-300 disabled:opacity-30 text-sm">▲</button>
                       <button type="button" onClick={() => moveDown(i)} disabled={i >= orderedExercises.length - 1} className="text-gray-600 hover:text-gray-300 disabled:opacity-30 text-sm">▼</button>
                     </div>
@@ -208,14 +317,16 @@ export default function Routines() {
         </form>
       )}
 
-      {routines.length === 0 && !editing ? (
+      {!editing && !showPicker && routines.length === 0 && (
         <EmptyState
           icon="📋"
           title="No routines yet"
           description="Create a routine to quickly log related exercises."
-          action={<button onClick={startCreate} className="btn-primary text-sm">Create Routine</button>}
+          action={<button onClick={openCreate} className="btn-primary text-sm">Create Routine</button>}
         />
-      ) : (
+      )}
+
+      {!editing && !showPicker && routines.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {routines.map((routine) => {
             const routineExs = exercises.filter(e => routine.exercise_ids?.includes(e.id));
@@ -240,7 +351,7 @@ export default function Routines() {
                         <button onClick={() => { handleStartRoutine(routine.id); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2">
                           <span>▶</span> Start Workout
                         </button>
-                        <button onClick={() => { startEdit(routine); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2">
+                        <button onClick={() => { openEdit(routine); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2">
                           <span>✏️</span> Edit
                         </button>
                         <button onClick={() => { handleDelete(routine.id); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-gray-700 flex items-center gap-2">
@@ -254,29 +365,32 @@ export default function Routines() {
                 <p className="text-sm text-gray-500 mb-3">{routineExs.length} exercises</p>
 
                 <div className="space-y-2">
-                  {Object.entries(grouped).map(([group, exs]) => (
-                    <div key={group}>
-                      <div className={`flex items-center gap-1 border-l-4 ${(muscleColors[group]?.border) || 'border-l-gray-600'} pl-2 mb-1`}>
-                        <span className="text-xs">{muscleColors[group]?.emoji || '•'}</span>
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">{group}</span>
-                        <span className="text-[10px] text-gray-700">({exs.length})</span>
+                  {Object.entries(grouped).map(([group, exs]) => {
+                    const mc = muscleColors[group];
+                    return (
+                      <div key={group}>
+                        <div className={`flex items-center gap-1 border-l-4 ${mc?.border || 'border-l-gray-600'} pl-2 mb-1`}>
+                          <span className="text-xs">{mc?.emoji || '•'}</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">{group}</span>
+                          <span className="text-[10px] text-gray-700">({exs.length})</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {exs.map(ex => (
+                            <span key={ex.id} className={`text-xs px-2 py-0.5 rounded-full bg-gray-800 ${mc?.text || 'text-gray-400'}`}>
+                              {ex.name}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {exs.map(ex => (
-                          <span key={ex.id} className={`text-xs px-2 py-0.5 rounded-full bg-gray-800 ${muscleColors[group]?.text || 'text-gray-400'}`}>
-                            {ex.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-gray-800 flex gap-2">
                   <button onClick={() => handleStartRoutine(routine.id)} className="btn-primary text-xs flex-1 flex items-center justify-center gap-1">
                     <span>▶</span> Start
                   </button>
-                  <button onClick={() => startEdit(routine)} className="btn-secondary text-xs">Edit</button>
+                  <button onClick={() => openEdit(routine)} className="btn-secondary text-xs">Edit</button>
                 </div>
               </div>
             );
