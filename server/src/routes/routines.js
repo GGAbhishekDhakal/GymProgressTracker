@@ -58,13 +58,13 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { name, description, exercise_ids } = req.body;
+  const { name, description, day_of_week, exercise_ids } = req.body;
 
   if (!name) return res.status(400).json({ error: 'Name is required' });
 
   const { data: routine, error } = await supabase
     .from('routines')
-    .insert({ name, description: description || null })
+    .insert({ name, description: description || null, day_of_week: day_of_week || null })
     .select()
     .single();
 
@@ -88,7 +88,7 @@ router.post('/', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-  const { name, description, exercise_ids } = req.body;
+  const { name, description, day_of_week, exercise_ids } = req.body;
 
   const { data: existing, error: checkErr } = await supabase
     .from('routines')
@@ -102,6 +102,7 @@ router.put('/:id', async (req, res) => {
   const updates = {};
   if (name !== undefined) updates.name = name;
   if (description !== undefined) updates.description = description;
+  if (day_of_week !== undefined) updates.day_of_week = day_of_week || null;
 
   if (Object.keys(updates).length > 0) {
     const { error: updErr } = await supabase

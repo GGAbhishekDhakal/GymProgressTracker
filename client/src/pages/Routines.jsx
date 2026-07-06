@@ -1,39 +1,49 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
 const muscleGroups = ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'];
+const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 const muscleColors = {
-  Chest: { border: 'border-l-red-500/50', emoji: '🦍', text: 'text-red-400', bg: 'bg-red-500/10' },
-  Back: { border: 'border-l-emerald-500/50', emoji: '🔱', text: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-  Shoulders: { border: 'border-l-orange-500/50', emoji: '🏔️', text: 'text-orange-400', bg: 'bg-orange-500/10' },
-  Legs: { border: 'border-l-blue-500/50', emoji: '🦵', text: 'text-blue-400', bg: 'bg-blue-500/10' },
-  Arms: { border: 'border-l-purple-500/50', emoji: '💪', text: 'text-purple-400', bg: 'bg-purple-500/10' },
-  Core: { border: 'border-l-yellow-500/50', emoji: '🔥', text: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+  Chest: { border: 'border-l-red-500/50', emoji: '🦍', text: 'text-red-400', bg: 'bg-red-500/10', gradient: 'from-red-600/10 to-transparent' },
+  Back: { border: 'border-l-emerald-500/50', emoji: '🔱', text: 'text-emerald-400', bg: 'bg-emerald-500/10', gradient: 'from-emerald-600/10 to-transparent' },
+  Shoulders: { border: 'border-l-orange-500/50', emoji: '🏔️', text: 'text-orange-400', bg: 'bg-orange-500/10', gradient: 'from-orange-600/10 to-transparent' },
+  Legs: { border: 'border-l-blue-500/50', emoji: '🦵', text: 'text-blue-400', bg: 'bg-blue-500/10', gradient: 'from-blue-600/10 to-transparent' },
+  Arms: { border: 'border-l-purple-500/50', emoji: '💪', text: 'text-purple-400', bg: 'bg-purple-500/10', gradient: 'from-purple-600/10 to-transparent' },
+  Core: { border: 'border-l-yellow-500/50', emoji: '🔥', text: 'text-yellow-400', bg: 'bg-yellow-500/10', gradient: 'from-yellow-600/10 to-transparent' },
 };
 
 const templates = [
-  { name: 'Push Day', description: 'Chest · Shoulders', groups: ['Chest', 'Shoulders'], emoji: '🔥', gradient: 'from-red-600/20 to-orange-600/10' },
-  { name: 'Pull Day', description: 'Back · Arms', groups: ['Back', 'Arms'], emoji: '💪', gradient: 'from-emerald-600/20 to-purple-600/10' },
-  { name: 'Legs Day', description: 'Quads · Hamstrings · Glutes', groups: ['Legs'], emoji: '🦵', gradient: 'from-blue-600/20 to-cyan-600/10' },
-  { name: 'Full Body', description: 'All muscle groups', groups: ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'], emoji: '💯', gradient: 'from-emerald-600/20 to-yellow-600/10' },
-  { name: 'Chest + Triceps', description: 'Chest · Arms (Triceps)', groups: ['Chest', 'Arms'], emoji: '🦍', gradient: 'from-red-600/20 to-purple-600/10' },
-  { name: 'Back + Biceps', description: 'Back · Arms (Biceps)', groups: ['Back', 'Arms'], emoji: '🔱', gradient: 'from-emerald-600/20 to-purple-600/10' },
-  { name: 'Upper Body', description: 'Chest · Back · Shoulders · Arms', groups: ['Chest', 'Back', 'Shoulders', 'Arms'], emoji: '🏋️', gradient: 'from-red-600/20 via-emerald-600/10 to-purple-600/10' },
+  { name: 'Push Day', groups: ['Chest', 'Shoulders'], emoji: '🔥', gradient: 'from-red-600/20 to-orange-600/10' },
+  { name: 'Pull Day', groups: ['Back', 'Arms'], emoji: '💪', gradient: 'from-emerald-600/20 to-purple-600/10' },
+  { name: 'Legs Day', groups: ['Legs'], emoji: '🦵', gradient: 'from-blue-600/20 to-cyan-600/10' },
+  { name: 'Full Body', groups: ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'], emoji: '💯', gradient: 'from-emerald-600/20 to-yellow-600/10' },
+  { name: 'Chest + Triceps', groups: ['Chest', 'Arms'], emoji: '🦍', gradient: 'from-red-600/20 to-purple-600/10' },
+  { name: 'Back + Biceps', groups: ['Back', 'Arms'], emoji: '🔱', gradient: 'from-emerald-600/20 to-purple-600/10' },
+  { name: 'Upper Body', groups: ['Chest', 'Back', 'Shoulders', 'Arms'], emoji: '🏋️', gradient: 'from-red-600/20 via-emerald-600/10 to-purple-600/10' },
 ];
+
+const todayIndex = new Date().getDay();
+const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][todayIndex];
 
 export default function Routines() {
   const navigate = useNavigate();
+  const routinesRef = useRef(null);
   const [routines, setRoutines] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
   const [showPicker, setShowPicker] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editRoutine, setEditRoutine] = useState(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [dayOfWeek, setDayOfWeek] = useState('');
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [exerciseOrder, setExerciseOrder] = useState([]);
   const [showMenu, setShowMenu] = useState(null);
@@ -46,12 +56,17 @@ export default function Routines() {
 
   useEffect(() => { loadData(); }, []);
 
+  function flashSuccess(msg) {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(''), 2500);
+  }
+
   function applyTemplate(template) {
     const ids = exercises
       .filter(e => template.groups.includes(e.muscle_group))
       .map(e => e.id);
     setName(template.name);
-    setDescription(template.description);
+    setDescription('');
     setSelectedExercises(ids);
     setExerciseOrder(ids);
     setShowPicker(false);
@@ -62,24 +77,36 @@ export default function Routines() {
     setShowPicker(true);
     setEditRoutine(null);
     setEditing(null);
+    setName('');
+    setDescription('');
+    setDayOfWeek('');
+    setSelectedExercises([]);
+    setExerciseOrder([]);
   }
 
   function openEdit(routine) {
-    setShowPicker(true);
     setEditRoutine(routine);
-    setEditing(null);
+    setName(routine.name);
+    setDescription(routine.description || '');
+    setDayOfWeek(routine.day_of_week || '');
+    setSelectedExercises(routine.exercise_ids || []);
+    setExerciseOrder(routine.exercise_ids || []);
+    setEditing(routine.id);
+    setShowPicker(false);
   }
 
   function skipPicker() {
     if (editRoutine) {
       setName(editRoutine.name);
       setDescription(editRoutine.description || '');
+      setDayOfWeek(editRoutine.day_of_week || '');
       setSelectedExercises(editRoutine.exercise_ids || []);
       setExerciseOrder(editRoutine.exercise_ids || []);
       setEditing(editRoutine.id);
     } else {
       setName('');
       setDescription('');
+      setDayOfWeek('');
       setSelectedExercises([]);
       setExerciseOrder([]);
       setEditing('new');
@@ -96,6 +123,14 @@ export default function Routines() {
     setEditing(null);
     setEditRoutine(null);
     setShowMenu(null);
+  }
+
+  function clearForm() {
+    setName('');
+    setDescription('');
+    setDayOfWeek('');
+    setSelectedExercises([]);
+    setExerciseOrder([]);
   }
 
   function toggleExercise(id) {
@@ -136,16 +171,28 @@ export default function Routines() {
   async function handleSave(e) {
     e.preventDefault();
     if (!name.trim()) return;
+    setSaving(true);
     try {
+      const payload = {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        day_of_week: dayOfWeek || null,
+        exercise_ids: exerciseOrder,
+      };
       if (editing === 'new') {
-        await api.createRoutine({ name: name.trim(), description: description.trim() || undefined, exercise_ids: exerciseOrder });
+        await api.createRoutine(payload);
+        flashSuccess('Routine created! 🎉');
       } else {
-        await api.updateRoutine(editing, { name: name.trim(), description: description.trim() || undefined, exercise_ids: exerciseOrder });
+        await api.updateRoutine(editing, payload);
+        flashSuccess('Routine updated! ✨');
       }
       cancelAll();
       loadData();
+      setTimeout(() => routinesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch (err) {
       alert(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -153,6 +200,7 @@ export default function Routines() {
     if (!confirm('Delete this routine?')) return;
     try {
       await api.deleteRoutine(id);
+      flashSuccess('Routine deleted');
       loadData();
     } catch (err) {
       alert(err.message);
@@ -168,6 +216,15 @@ export default function Routines() {
   const orderedExercises = editing ? exerciseOrder : [];
   const selectedSet = new Set(selectedExercises);
 
+  const todayRoutine = routines.find(r => r.day_of_week === todayName);
+  const dayMap = {};
+  for (const r of routines) {
+    if (r.day_of_week) {
+      if (!dayMap[r.day_of_week]) dayMap[r.day_of_week] = [];
+      dayMap[r.day_of_week].push(r);
+    }
+  }
+
   function groupSelectedCount(group) {
     return exercises.filter(e => e.muscle_group === group && selectedSet.has(e.id)).length;
   }
@@ -181,7 +238,7 @@ export default function Routines() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" ref={routinesRef}>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">📋 My Routines</h1>
         {!showPicker && editing !== 'new' && !editing && (
@@ -191,6 +248,77 @@ export default function Routines() {
         )}
       </div>
 
+      {successMsg && (
+        <div className="animate-[fadeInUp_0.3s_ease-out] bg-emerald-900/40 border border-emerald-700/50 rounded-xl px-4 py-3 text-emerald-300 text-sm font-medium text-center backdrop-blur-sm">
+          {successMsg}
+        </div>
+      )}
+
+      {routines.length > 0 && (
+        <div className="card border-gray-700/50">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">📅 Weekly Schedule</h2>
+            {todayRoutine && (
+              <span className="text-xs text-emerald-400 animate-[pulseGlow_2s_infinite] rounded-full px-2 py-0.5 bg-emerald-900/30">
+                Today: {todayRoutine.name}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {dayAbbr.map((abbr, i) => {
+              const fullName = dayNames[i];
+              const dayRoutines = dayMap[fullName] || [];
+              const isToday = fullName === todayName;
+              return (
+                <div key={fullName} className="text-center">
+                  <div className={`text-[10px] font-semibold uppercase mb-1 ${isToday ? 'text-emerald-400' : 'text-gray-600'}`}>
+                    {abbr}
+                  </div>
+                  <div className={`relative rounded-lg py-1.5 ${isToday ? 'bg-emerald-900/30 ring-1 ring-emerald-700/50' : 'bg-gray-800/50'}`}>
+                    {dayRoutines.length === 0 ? (
+                      <span className="text-[10px] text-gray-700">—</span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {dayRoutines.slice(0, 2).map(r => (
+                          <button
+                            key={r.id}
+                            onClick={() => navigate(`/log?routine=${r.id}`)}
+                            className="block text-[9px] leading-tight text-gray-300 hover:text-emerald-400 truncate px-1 w-full transition-colors"
+                          >
+                            {r.name}
+                          </button>
+                        ))}
+                        {dayRoutines.length > 2 && (
+                          <div className="text-[8px] text-gray-600">+{dayRoutines.length - 2}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {todayRoutine && (
+        <div className="bg-gradient-to-r from-emerald-900/30 to-blue-900/20 border border-emerald-800/40 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">📅</span>
+              <span className="text-sm text-gray-400">Today's Workout</span>
+            </div>
+            <h3 className="text-xl font-bold text-gray-200">{todayRoutine.name}</h3>
+            {todayRoutine.description && (
+              <p className="text-sm text-gray-500">{todayRoutine.description}</p>
+            )}
+          </div>
+          <button onClick={() => handleStartRoutine(todayRoutine.id)} className="btn-primary text-sm flex items-center gap-1 shrink-0">
+            <span>▶</span> Start
+          </button>
+        </div>
+      )}
+
       {showPicker && (
         <div className="card border-emerald-800/30">
           <div className="flex items-center justify-between mb-3">
@@ -199,7 +327,7 @@ export default function Routines() {
             </h2>
             <button onClick={cancelAll} className="text-sm text-gray-500 hover:text-gray-300">Cancel</button>
           </div>
-          <p className="text-sm text-gray-400 mb-4">Start from a template or build your own</p>
+          <p className="text-sm text-gray-400 mb-4">Start from a template</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {templates.map(t => (
               <button
@@ -209,7 +337,7 @@ export default function Routines() {
               >
                 <div className="text-xl mb-1">{t.emoji}</div>
                 <div className="font-semibold text-sm text-gray-200 group-hover:text-emerald-400">{t.name}</div>
-                <div className="text-[10px] text-gray-500 mt-0.5">{t.description}</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">{t.groups.join(' · ')}</div>
               </button>
             ))}
           </div>
@@ -227,12 +355,26 @@ export default function Routines() {
             <h2 className="text-lg font-semibold text-gray-200">
               {editing === 'new' ? '🏗️ New Routine' : '✏️ Edit Routine'}
             </h2>
-            <button type="button" onClick={cancelAll} className="text-sm text-gray-500 hover:text-gray-300">Cancel</button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={clearForm} className="text-xs text-gray-500 hover:text-gray-300">Clear</button>
+              <button type="button" onClick={cancelAll} className="text-sm text-gray-500 hover:text-gray-300">Cancel</button>
+            </div>
           </div>
 
-          <div>
-            <label>Routine Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Push Day" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label>Routine Name</label>
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Push Day" />
+            </div>
+            <div>
+              <label>Scheduled Day</label>
+              <select value={dayOfWeek} onChange={(e) => setDayOfWeek(e.target.value)}>
+                <option value="">— None —</option>
+                {dayNames.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>
@@ -243,11 +385,14 @@ export default function Routines() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label>Exercises ({selectedExercises.length} selected)</label>
-              <button type="button" onClick={goBackToPicker} className="text-xs text-emerald-500 hover:text-emerald-400">← Pick template</button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => { setSelectedExercises([]); setExerciseOrder([]); }} className="text-xs text-gray-500 hover:text-gray-300">Deselect all</button>
+                <button type="button" onClick={goBackToPicker} className="text-xs text-emerald-500 hover:text-emerald-400">← Pick template</button>
+              </div>
             </div>
-            <div className="mt-2 space-y-3 max-h-72 overflow-y-auto">
+            <div className="mt-2 space-y-2 max-h-80 overflow-y-auto">
               {muscleGroups.map(group => {
-                const groupExs = exercises.filter(e => e.muscle_group === group);
+                const groupExs = exercises.filter(e => e.muscle_group === group).sort((a, b) => a.name.localeCompare(b.name));
                 if (groupExs.length === 0) return null;
                 const sel = groupSelectedCount(group);
                 const total = groupTotalCount(group);
@@ -256,30 +401,29 @@ export default function Routines() {
                 return (
                   <div key={group}>
                     <div
-                      className={`flex items-center justify-between gap-2 border-l-4 ${mc?.border || 'border-l-gray-600'} pl-2 mb-1 cursor-pointer hover:opacity-80 transition-opacity`}
+                      className={`flex items-center gap-2 border-l-4 ${mc?.border || 'border-l-gray-600'} pl-2 mb-1 cursor-pointer hover:opacity-80 transition-opacity`}
                       onClick={() => toggleGroup(group)}
                     >
-                      <div className="flex items-center gap-2">
-                        <span>{mc?.emoji || '•'}</span>
-                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{group}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${allSel ? `${mc?.bg} ${mc?.text}` : 'text-gray-700 bg-gray-800'}`}>
-                          {sel}/{total}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-gray-600">{allSel ? '✓ All' : 'Tap to toggle'}</span>
+                      <span className="text-xs">{mc?.emoji || '•'}</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{group}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${allSel ? `${mc?.bg} ${mc?.text}` : 'text-gray-700 bg-gray-800'}`}>
+                        {sel}/{total}
+                      </span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                       {groupExs.map(ex => (
-                        <label key={ex.id} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer transition-colors ${
-                          selectedSet.has(ex.id) ? `${mc?.bg} ring-1 ring-emerald-600/30` : 'hover:bg-gray-800'
+                        <label key={ex.id} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer transition-all ${
+                          selectedSet.has(ex.id) ? `${mc?.bg} ring-1 ring-emerald-600/30 scale-[1.01]` : 'hover:bg-gray-800 hover:scale-[1.01]'
                         }`}>
                           <input
                             type="checkbox"
                             checked={selectedSet.has(ex.id)}
                             onChange={() => toggleExercise(ex.id)}
-                            className="rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500"
+                            className="rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500 shrink-0"
                           />
+                          <span className="text-xs">{mc?.emoji || '•'}</span>
                           <span className={`text-sm ${selectedSet.has(ex.id) ? 'text-gray-200' : 'text-gray-400'}`}>{ex.name}</span>
+                          <span className={`text-[10px] ml-auto ${mc?.text || 'text-gray-600'}`}>{ex.category}</span>
                         </label>
                       ))}
                     </div>
@@ -311,8 +455,12 @@ export default function Routines() {
             </div>
           )}
 
-          <button type="submit" className="btn-primary w-full">
-            {editing === 'new' ? 'Create Routine' : 'Save Changes'}
+          <button
+            type="submit"
+            className="btn-primary w-full"
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : editing === 'new' ? 'Create Routine' : 'Save Changes'}
           </button>
         </form>
       )}
@@ -339,7 +487,14 @@ export default function Routines() {
               <div key={routine.id} className="card relative hover:border-gray-700 transition-colors">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-200 text-lg">{routine.name}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-semibold text-gray-200 text-lg">{routine.name}</h3>
+                      {routine.day_of_week && (
+                        <span className="text-[10px] bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full border border-gray-700/50">
+                          📅 {routine.day_of_week.slice(0, 3)}
+                        </span>
+                      )}
+                    </div>
                     {routine.description && (
                       <p className="text-sm text-gray-500">{routine.description}</p>
                     )}

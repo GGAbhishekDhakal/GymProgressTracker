@@ -7,12 +7,12 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 const muscleGroups = ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'];
 const muscleColors = {
-  Chest: { border: 'border-l-red-500/50', emoji: '🦍' },
-  Back: { border: 'border-l-emerald-500/50', emoji: '🔱' },
-  Shoulders: { border: 'border-l-orange-500/50', emoji: '🏔️' },
-  Legs: { border: 'border-l-blue-500/50', emoji: '🦵' },
-  Arms: { border: 'border-l-purple-500/50', emoji: '💪' },
-  Core: { border: 'border-l-yellow-500/50', emoji: '🔥' },
+  Chest: { border: 'border-l-red-500/50', emoji: '🦍', text: 'text-red-400', bg: 'bg-red-500/10' },
+  Back: { border: 'border-l-emerald-500/50', emoji: '🔱', text: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  Shoulders: { border: 'border-l-orange-500/50', emoji: '🏔️', text: 'text-orange-400', bg: 'bg-orange-500/10' },
+  Legs: { border: 'border-l-blue-500/50', emoji: '🦵', text: 'text-blue-400', bg: 'bg-blue-500/10' },
+  Arms: { border: 'border-l-purple-500/50', emoji: '💪', text: 'text-purple-400', bg: 'bg-purple-500/10' },
+  Core: { border: 'border-l-yellow-500/50', emoji: '🔥', text: 'text-yellow-400', bg: 'bg-yellow-500/10' },
 };
 
 export default function LogWorkout() {
@@ -22,7 +22,8 @@ export default function LogWorkout() {
   const [mode, setMode] = useState(null);
   const [selectedRoutine, setSelectedRoutine] = useState(null);
   const [routineExercises, setRoutineExercises] = useState([]);
-  const [routineStep, setRoutineStep] = useState(0);
+  const [completedExIds, setCompletedExIds] = useState([]);
+  const [loggingExId, setLoggingExId] = useState(null);
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [muscleFilter, setMuscleFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -44,7 +45,6 @@ export default function LogWorkout() {
           setSelectedRoutine(rt.id);
           const exs = exData.filter(e => rt.exercise_ids?.includes(e.id));
           setRoutineExercises(exs);
-          setRoutineStep(0);
         }
       }
     }).finally(() => setLoading(false));
@@ -55,11 +55,12 @@ export default function LogWorkout() {
     if (!idNum) return;
     setMode('routine');
     setSelectedRoutine(idNum);
+    setCompletedExIds([]);
+    setLoggingExId(null);
     const routine = routines.find(r => r.id === idNum);
     if (routine) {
       const exs = exercises.filter(e => routine.exercise_ids.includes(e.id));
       setRoutineExercises(exs);
-      setRoutineStep(0);
     }
   }
 
@@ -75,15 +76,19 @@ export default function LogWorkout() {
   }
 
   function handleLogged() {
-    setLogKey(k => k + 1);
-    if (mode === 'routine') {
-      const next = routineStep + 1;
-      if (next < routineExercises.length) {
-        setRoutineStep(next);
-      } else {
-        setRoutineStep(-1);
-      }
+    if (loggingExId) {
+      setCompletedExIds(prev => [...new Set([...prev, loggingExId])]);
     }
+    setLoggingExId(null);
+    setLogKey(k => k + 1);
+  }
+
+  function exitToMenu() {
+    setMode(null);
+    setSelectedRoutine(null);
+    setRoutineExercises([]);
+    setCompletedExIds([]);
+    setLoggingExId(null);
   }
 
   const filteredExercises = exercises.filter(ex => {
@@ -98,12 +103,15 @@ export default function LogWorkout() {
 
   if (loading) return <LoadingSpinner />;
 
-  const currentRoutineEx = mode === 'routine' && routineStep >= 0 ? routineExercises[routineStep] : null;
+  const routineDone = mode === 'routine' && routineExercises.length > 0 && completedExIds.length >= routineExercises.length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">💪 Log Workout</h1>
+        {mode && (
+          <button onClick={exitToMenu} className="text-sm text-gray-500 hover:text-gray-300">← Back</button>
+        )}
       </div>
 
       {!mode && routines.length > 0 && (
@@ -113,18 +121,32 @@ export default function LogWorkout() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {routines.map(r => {
               const exs = exercises.filter(e => r.exercise_ids?.includes(e.id));
+              const groupCounts = {};
+              for (const ex of exs) {
+                groupCounts[ex.muscle_group] = (groupCounts[ex.muscle_group] || 0) + 1;
+              }
               return (
                 <button
                   key={r.id}
                   onClick={() => startRoutine(r.id)}
-                  className="text-left p-3 rounded-lg bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-emerald-700 transition-all group"
+                  className="text-left p-4 rounded-xl bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-emerald-700 hover:scale-[1.02] hover:-translate-y-0.5 transition-all duration-200 group"
                 >
-                  <span className="font-medium text-gray-200 group-hover:text-emerald-400">{r.name}</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {exs.slice(0, 4).map(ex => (
-                      <span key={ex.id} className="text-[10px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded">{ex.name}</span>
-                    ))}
-                    {exs.length > 4 && <span className="text-[10px] text-gray-600">+{exs.length - 4}</span>}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium text-gray-200 group-hover:text-emerald-400">{r.name}</span>
+                    {r.day_of_week && (
+                      <span className="text-[10px] text-gray-600">📅 {r.day_of_week.slice(0, 3)}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">{exs.length} exercises</p>
+                  <div className="flex flex-wrap gap-1">
+                    {Object.entries(groupCounts).slice(0, 4).map(([g, count]) => {
+                      const mc = muscleColors[g];
+                      return (
+                        <span key={g} className={`text-[10px] px-1.5 py-0.5 rounded-full ${mc?.bg || 'bg-gray-700'} ${mc?.text || 'text-gray-400'}`}>
+                          {mc?.emoji || ''} {count}
+                        </span>
+                      );
+                    })}
                   </div>
                 </button>
               );
@@ -145,39 +167,82 @@ export default function LogWorkout() {
         </div>
       )}
 
-      {mode === 'routine' && routineStep >= 0 && currentRoutineEx && (
-        <div className={`card border-l-4 ${muscleColors[currentRoutineEx.muscle_group]?.border || 'border-l-emerald-500'}`}>
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wider">Step {routineStep + 1} of {routineExercises.length}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{muscleColors[currentRoutineEx.muscle_group]?.emoji || '💪'}</span>
-                <h2 className="text-xl font-bold text-gray-200">{currentRoutineEx.name}</h2>
-              </div>
-              <span className="text-sm text-gray-500">{currentRoutineEx.muscle_group} · {currentRoutineEx.category}</span>
-            </div>
-            <div className="flex flex-wrap gap-1 max-w-[120px]">
-              {routineExercises.map((ex, i) => (
-                <span key={ex.id} className={`w-2 h-2 rounded-full ${i < routineStep ? 'bg-emerald-500' : i === routineStep ? 'bg-emerald-400 ring-2 ring-emerald-400/30' : 'bg-gray-700'}`} />
-              ))}
-            </div>
+      {mode === 'routine' && !routineDone && loggingExId && (
+        <div className="card border-emerald-800/30">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-200">
+              {exercises.find(e => e.id == loggingExId)?.name || 'Log Exercise'}
+            </h2>
+            <button onClick={() => setLoggingExId(null)} className="text-sm text-gray-500 hover:text-gray-300">← Back</button>
           </div>
           <LogForm
-            key={`${logKey}-${routineStep}`}
-            exercises={[currentRoutineEx]}
+            key={`${logKey}-${loggingExId}`}
+            exercises={exercises}
+            defaultExerciseId={loggingExId}
             onLogged={handleLogged}
           />
         </div>
       )}
 
-      {mode === 'routine' && routineStep === -1 && (
-        <div className="card text-center py-8 space-y-3">
+      {mode === 'routine' && !routineDone && !loggingExId && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-200">
+              {routines.find(r => r.id === selectedRoutine)?.name || 'Routine'}
+            </h2>
+            <span className="text-sm text-gray-500">
+              {completedExIds.length}/{routineExercises.length} logged
+            </span>
+          </div>
+          {routineExercises.length > 0 && (
+            <div className="space-y-2">
+              {routineExercises.map((ex, i) => {
+                const isDone = completedExIds.includes(ex.id);
+                const mc = muscleColors[ex.muscle_group];
+                return (
+                  <div
+                    key={ex.id}
+                    className={`card !p-3 flex items-center justify-between transition-all duration-200 ${
+                      isDone ? 'opacity-60 border-emerald-800/40' : 'hover:border-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className={`w-8 h-8 rounded-lg ${mc?.bg || 'bg-gray-800'} flex items-center justify-center text-sm shrink-0`}>
+                        {isDone ? '✅' : (mc?.emoji || '💪')}
+                      </div>
+                      <div className="min-w-0">
+                        <div className={`font-medium text-sm truncate ${isDone ? 'text-gray-500' : 'text-gray-200'}`}>
+                          {ex.name}
+                        </div>
+                        <div className="text-[10px] text-gray-600">{ex.muscle_group} · {ex.category}</div>
+                      </div>
+                    </div>
+                    {isDone ? (
+                      <span className="text-xs text-emerald-600 shrink-0">Logged ✓</span>
+                    ) : (
+                      <button
+                        onClick={() => setLoggingExId(ex.id)}
+                        className="btn-primary text-[10px] !px-3 !py-1.5 shrink-0 flex items-center gap-1 animate-[pulseGlow_2s_infinite]"
+                      >
+                        <span>💪</span> Log
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {routineDone && (
+        <div className="card text-center py-8 space-y-3 animate-[fadeInUp_0.4s_ease-out]">
           <div className="text-4xl">🎉</div>
           <p className="text-emerald-400 font-semibold text-lg">Workout complete!</p>
           <p className="text-gray-500 text-sm">{routineExercises.length} exercises logged</p>
           <div className="flex gap-2 justify-center">
-            <button onClick={() => { setMode(null); setSelectedRoutine(null); }} className="btn-primary text-sm">Done</button>
-            <button onClick={() => { setRoutineStep(0); }} className="btn-secondary text-sm">Log again</button>
+            <button onClick={exitToMenu} className="btn-primary text-sm">Done</button>
+            <button onClick={() => { setCompletedExIds([]); setLoggingExId(null); }} className="btn-secondary text-sm">Log again</button>
           </div>
         </div>
       )}
@@ -200,7 +265,7 @@ export default function LogWorkout() {
           </div>
 
           {selectedExercises.length > 0 && (
-            <div className="card border-l-4 border-emerald-500">
+            <div className="card border-l-4 border-emerald-500 animate-[fadeInUp_0.3s_ease-out]">
               <LogForm
                 key={logKey}
                 exercises={exercises.filter(e => selectedExercises.includes(e.id))}
@@ -215,9 +280,9 @@ export default function LogWorkout() {
                 ? `✅ ${selectedExercises.length} selected — tap to toggle`
                 : 'Tap exercises below to select them for logging'}
             </p>
-            <div className="space-y-4 max-h-[500px] overflow-y-auto">
+            <div className="space-y-4">
               {groupedExercises.map(group => (
-                <div key={group.label}>
+                <div key={group.label} className="animate-[fadeInUp_0.3s_ease-out]">
                   <div className={`flex items-center gap-2 mb-2 border-l-4 ${muscleColors[group.label]?.border || 'border-l-gray-600'} pl-3`}>
                     <span className="text-xs">{muscleColors[group.label]?.emoji || '•'}</span>
                     <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{group.label}</span>

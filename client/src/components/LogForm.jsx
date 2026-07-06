@@ -1,13 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api';
 
-export default function LogForm({ exercises, onLogged }) {
+export default function LogForm({ exercises, onLogged, defaultExerciseId }) {
   const [currentEx, setCurrentEx] = useState(null);
   const [sets, setSets] = useState([{ weight: '', reps: '10' }]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (defaultExerciseId) {
+      const ex = exercises.find(e => e.id == defaultExerciseId);
+      if (ex) {
+        setCurrentEx(ex);
+        setSets([{ weight: '', reps: '10' }]);
+        setNotes('');
+        setDone(false);
+      }
+    }
+  }, [defaultExerciseId]);
 
   function selectExercise(id) {
     const ex = exercises.find(e => e.id === parseInt(id));

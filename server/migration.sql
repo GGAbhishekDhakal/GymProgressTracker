@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS routines (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
+  day_of_week TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -30,6 +31,8 @@ CREATE TABLE IF NOT EXISTS workout_logs (
   logged_at DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE routines ADD COLUMN IF NOT EXISTS day_of_week TEXT;
 
 CREATE TABLE IF NOT EXISTS goals (
   id BIGSERIAL PRIMARY KEY,
