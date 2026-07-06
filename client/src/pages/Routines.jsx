@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
+import ExerciseCard from '../components/ExerciseCard';
 
 const muscleGroups = ['Chest', 'Back', 'Shoulders', 'Legs', 'Arms', 'Core'];
 const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -427,7 +428,7 @@ export default function Routines() {
                 <button type="button" onClick={goBackToPicker} className="text-xs text-emerald-500 hover:text-emerald-400">← Pick template</button>
               </div>
             </div>
-            <div className="mt-2 space-y-2 max-h-80 overflow-y-auto">
+            <div className="mt-2 space-y-3 max-h-80 overflow-y-auto">
               {muscleGroups.map(group => {
                 const groupExs = exercises.filter(e => e.muscle_group === group).sort((a, b) => a.name.localeCompare(b.name));
                 if (groupExs.length === 0) return null;
@@ -438,7 +439,7 @@ export default function Routines() {
                 return (
                   <div key={group}>
                     <div
-                      className={`flex items-center gap-2 border-l-4 ${mc?.border || 'border-l-gray-600'} pl-2 mb-1 cursor-pointer hover:opacity-80 transition-opacity`}
+                      className={`flex items-center gap-2 border-l-4 ${mc?.border || 'border-l-gray-600'} pl-2 mb-2 cursor-pointer hover:opacity-80 transition-opacity`}
                       onClick={() => toggleGroup(group)}
                     >
                       <span className="text-xs">{mc?.emoji || '•'}</span>
@@ -447,23 +448,14 @@ export default function Routines() {
                         {sel}/{total}
                       </span>
                     </div>
-                    <div className="space-y-0.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       {groupExs.map(ex => (
-                        <label key={ex.id} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer transition-all ${
-                          selectedSet.has(ex.id) ? `${mc?.bg} ring-1 ring-emerald-600/30` : 'hover:bg-gray-800'
-                        }`}>
-                          <input
-                            type="checkbox"
-                            checked={selectedSet.has(ex.id)}
-                            onChange={() => toggleExercise(ex.id)}
-                            className="rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500 shrink-0"
-                          />
-                          <span className="text-xs shrink-0">{mc?.emoji || '•'}</span>
-                          <span className={`text-sm truncate flex-1 ${selectedSet.has(ex.id) ? 'text-gray-200' : 'text-gray-400'}`}>
-                            {ex.name}
-                          </span>
-                          <span className={`text-[10px] shrink-0 ${mc?.text || 'text-gray-600'}`}>{ex.category}</span>
-                        </label>
+                        <ExerciseCard
+                          key={ex.id}
+                          exercise={ex}
+                          selected={selectedSet.has(ex.id)}
+                          onToggle={toggleExercise}
+                        />
                       ))}
                     </div>
                   </div>
