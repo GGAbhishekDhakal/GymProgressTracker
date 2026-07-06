@@ -200,15 +200,33 @@ export default function Dashboard() {
         </div>
         {selectedCalendarDay && (() => {
           const summary = getDaySummary(selectedCalendarDay);
+          const dayDate = new Date(selectedCalendarDay + 'T00:00:00');
+          const weekdayName = dayDate.toLocaleDateString('en-US', { weekday: 'long' });
+          const dayRoutines = routines.filter(r => r.day_of_week === weekdayName);
           return (
-            <div className="mt-2 pt-2 border-t border-gray-800 animate-[fadeInUp_0.2s_ease-out]">
-              <p className="text-xs text-gray-400">
-                {selectedCalendarDay === todayStr ? 'Today' : new Date(selectedCalendarDay + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}:
+            <div className="mt-2 pt-2 border-t animate-[fadeInUp_0.2s_ease-out]" style={{ borderColor: 'var(--border)' }}>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {selectedCalendarDay === todayStr ? 'Today' : dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}:
                 {' '}{summary.count} set{summary.count !== 1 ? 's' : ''}
                 {summary.exercises.length > 0 && (
-                  <> — <span className="text-gray-500">{summary.exercises.slice(0, 3).join(', ')}{summary.exercises.length > 3 ? '...' : ''}</span></>
+                  <> — <span style={{ color: 'var(--text-dim)' }}>{summary.exercises.slice(0, 3).join(', ')}{summary.exercises.length > 3 ? '...' : ''}</span></>
                 )}
               </p>
+              {dayRoutines.length > 0 && (
+                <div className="mt-1.5 space-y-1">
+                  {dayRoutines.map(r => (
+                    <div key={r.id} className="flex items-center justify-between">
+                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>📋 {r.name}</span>
+                      <button
+                        onClick={() => navigate(`/log?routine=${r.id}`)}
+                        className="text-[10px] text-emerald-400 hover:text-emerald-300"
+                      >
+                        Start ▶
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })()}

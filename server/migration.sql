@@ -43,3 +43,13 @@ CREATE TABLE IF NOT EXISTS goals (
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'achieved', 'abandoned')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS session_targets (
+  id BIGSERIAL PRIMARY KEY,
+  exercise_id INTEGER NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+  target_volume NUMERIC(10,2),
+  target_reps INTEGER,
+  target_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

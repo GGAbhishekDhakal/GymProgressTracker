@@ -2,15 +2,74 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-body: #030712;
+  --bg-body-secondary: #0a0f1a;
+  --bg-card: rgba(17, 24, 39, 0.8);
+  --bg-card-hover: rgba(31, 41, 55, 0.8);
+  --bg-card-solid: #111827;
+  --bg-input: rgba(31, 41, 55, 0.8);
+  --bg-sidebar: rgba(17, 24, 39, 0.95);
+  --border: rgba(31, 41, 55, 0.8);
+  --border-light: rgba(55, 65, 81, 0.8);
+  --text-primary: #f3f4f6;
+  --text-secondary: #e5e7eb;
+  --text-tertiary: #d1d5db;
+  --text-muted: #9ca3af;
+  --text-dim: #6b7280;
+  --text-faint: #4b5563;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --sidebar-width: 220px;
+  --sidebar-collapsed: 64px;
+}
+
+html.light {
+  --bg-body: #f3f4f6;
+  --bg-body-secondary: #e5e7eb;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-card-hover: rgba(243, 244, 246, 0.9);
+  --bg-card-solid: #ffffff;
+  --bg-input: #ffffff;
+  --bg-sidebar: rgba(255, 255, 255, 0.95);
+  --border: rgba(229, 231, 235, 0.9);
+  --border-light: rgba(209, 213, 219, 0.9);
+  --text-primary: #111827;
+  --text-secondary: #1f2937;
+  --text-tertiary: #374151;
+  --text-muted: #4b5563;
+  --text-dim: #6b7280;
+  --text-faint: #9ca3af;
+  --overlay: rgba(0, 0, 0, 0.2);
+}
+
 @layer base {
   body {
-    @apply bg-gray-950 text-gray-100 antialiased;
+    @apply antialiased;
+    background-color: var(--bg-body);
+    color: var(--text-primary);
     background-image: radial-gradient(ellipse at 20% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
                       radial-gradient(ellipse at 80% 50%, rgba(52, 211, 153, 0.02) 0%, transparent 50%);
   }
 
+  html.light body {
+    background-image: radial-gradient(ellipse at 20% 50%, rgba(16, 185, 129, 0.04) 0%, transparent 50%),
+                      radial-gradient(ellipse at 80% 50%, rgba(52, 211, 153, 0.03) 0%, transparent 50%);
+  }
+
+  html.light .text-gray-200 { color: #1f2937; }
+  html.light .text-gray-300 { color: #374151; }
+  html.light .text-gray-400 { color: #6b7280; }
+  html.light .text-gray-500 { color: #9ca3af; }
+  html.light .text-gray-600 { color: #9ca3af; }
+  html.light .bg-gray-800 { background-color: #e5e7eb; }
+  html.light .bg-gray-800\/50 { background-color: rgba(229, 231, 235, 0.5); }
+  html.light .bg-gray-900\/50 { background-color: #f9fafb; }
+
   input, select, textarea {
-    @apply bg-gray-800/80 border-gray-700/80 text-gray-100 rounded-lg px-3 py-2 w-full backdrop-blur-sm;
+    background-color: var(--bg-input);
+    border-color: var(--border);
+    color: var(--text-primary);
+    @apply rounded-lg px-3 py-2 w-full backdrop-blur-sm;
   }
 
   input:focus, select:focus, textarea:focus {
@@ -18,12 +77,13 @@
   }
 
   label {
-    @apply text-sm font-medium text-gray-400 mb-1 block;
+    @apply text-sm font-medium mb-1 block;
+    color: var(--text-muted);
   }
 
   ::-webkit-scrollbar { @apply w-1.5; }
   ::-webkit-scrollbar-track { @apply bg-transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-gray-800 rounded-full hover:bg-gray-700; }
+  ::-webkit-scrollbar-thumb { @apply rounded-full hover:bg-gray-700; background-color: var(--text-faint); }
 }
 
 @layer components {
@@ -32,7 +92,14 @@
   }
 
   .btn-secondary {
-    @apply bg-gray-800/80 hover:bg-gray-700/80 text-gray-200 font-semibold px-4 py-2 rounded-lg transition-all duration-200 backdrop-blur-sm;
+    @apply font-semibold px-4 py-2 rounded-lg transition-all duration-200 backdrop-blur-sm;
+    background-color: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--bg-card-hover);
   }
 
   .btn-danger {
@@ -40,19 +107,26 @@
   }
 
   .card {
-    @apply bg-gray-900/80 border border-gray-800/80 rounded-xl p-4 backdrop-blur-sm transition-all duration-200;
+    @apply rounded-xl p-4 backdrop-blur-sm transition-all duration-200;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
   }
 
   .card:hover {
-    @apply border-gray-700/80 shadow-lg shadow-black/10;
+    border-color: var(--border-light);
+    @apply shadow-lg shadow-black/10;
   }
 
   .card-glass {
-    @apply bg-gray-900/40 border border-gray-800/60 rounded-xl p-4 backdrop-blur-xl transition-all duration-200;
+    @apply rounded-xl p-4 backdrop-blur-xl transition-all duration-200;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
   }
 
   .card-glass:hover {
-    @apply bg-gray-900/50 border-gray-700/60 shadow-xl shadow-black/10;
+    background-color: var(--bg-card-hover);
+    border-color: var(--border-light);
+    @apply shadow-xl shadow-black/10;
   }
 
   .stat-card {
@@ -68,7 +142,8 @@
   }
 
   .stat-label {
-    @apply text-sm text-gray-500 mt-1;
+    @apply text-sm mt-1;
+    color: var(--text-dim);
   }
 }
 
@@ -102,3 +177,12 @@
 .stat-value { animation: countUp 0.4s ease-out 0.3s both; }
 .card { animation: fadeInUp 0.3s ease-out both; }
 .animate-glow { animation: pulseGlow 2s infinite; }
+
+@media (min-width: 1024px) {
+  .main-content {
+    margin-left: 64px;
+  }
+  html.sidebar-expanded .main-content {
+    margin-left: 224px;
+  }
+}

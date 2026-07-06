@@ -8,6 +8,7 @@ const routinesRouter = require('./routes/routines');
 const logsRouter = require('./routes/logs');
 const progressRouter = require('./routes/progress');
 const goalsRouter = require('./routes/goals');
+const targetsRouter = require('./routes/targets');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -20,6 +21,7 @@ app.use('/api/routines', routinesRouter);
 app.use('/api/logs', logsRouter);
 app.use('/api/progress', progressRouter);
 app.use('/api/goals', goalsRouter);
+app.use('/api/targets', targetsRouter);
 
 app.get('/api/stats', async (req, res) => {
   const { data: dates } = await supabase

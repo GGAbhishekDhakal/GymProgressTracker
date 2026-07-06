@@ -15,6 +15,16 @@ const muscleColors = {
   Core: { border: 'border-l-yellow-500/50', emoji: '🔥', text: 'text-yellow-400', bg: 'bg-yellow-500/10' },
 };
 
+const DRAFT_KEY = 'logFormDraft';
+
+function hasDraft() {
+  try { return !!localStorage.getItem(DRAFT_KEY); } catch { return false; }
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch {}
+}
+
 export default function LogWorkout() {
   const [searchParams] = useSearchParams();
   const [exercises, setExercises] = useState([]);
@@ -29,6 +39,12 @@ export default function LogWorkout() {
   const [search, setSearch] = useState('');
   const [logKey, setLogKey] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const [hasDraftFlag, setHasDraftFlag] = useState(hasDraft());
+
+  useEffect(() => {
+    setShowDraftBanner(hasDraft());
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -91,6 +107,20 @@ export default function LogWorkout() {
     setLoggingExId(null);
   }
 
+  function resumeDraft() {
+    setShowDraftBanner(false);
+    const hasEx = hasDraft();
+    if (hasEx) {
+      setMode('manual');
+    }
+  }
+
+  function discardDraft() {
+    clearDraft();
+    setShowDraftBanner(false);
+    setHasDraftFlag(false);
+  }
+
   const filteredExercises = exercises.filter(ex => {
     if (muscleFilter && ex.muscle_group !== muscleFilter) return false;
     if (search && !ex.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -104,20 +134,40 @@ export default function LogWorkout() {
   if (loading) return <LoadingSpinner />;
 
   const routineDone = mode === 'routine' && routineExercises.length > 0 && completedExIds.length >= routineExercises.length;
+  const todayFormatted = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">💪 Log Workout</h1>
+        <div>
+          <h1 className="text-2xl font-bold">💪 Log Workout</h1>
+          <p className="text-sm" style={{ color: 'var(--text-dim)' }}>📅 {todayFormatted}</p>
+        </div>
         {mode && (
-          <button onClick={exitToMenu} className="text-sm text-gray-500 hover:text-gray-300">← Back</button>
+          <button onClick={exitToMenu} className="text-sm" style={{ color: 'var(--text-dim)' }}>← Back</button>
         )}
       </div>
 
+      {showDraftBanner && (
+        <div className="card border-l-4 border-yellow-500 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📝</span>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>You have an unsaved workout</p>
+              <p className="text-xs" style={{ color: 'var(--text-dim)' }}>Auto-saved from your last session</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={resumeDraft} className="btn-primary text-xs">Resume</button>
+            <button onClick={discardDraft} className="btn-secondary text-xs">Discard</button>
+          </div>
+        </div>
+      )}
+
       {!mode && routines.length > 0 && (
-        <div className="card bg-gradient-to-r from-emerald-900/30 to-gray-900 border-emerald-800/50">
-          <h2 className="text-lg font-semibold text-gray-200 mb-2">🚀 Quick Start</h2>
-          <p className="text-sm text-gray-400 mb-3">Pick a routine and log sets exercise by exercise</p>
+        <div className="card" style={{ backgroundImage: 'linear-gradient(to right, rgba(16,185,129,0.08), transparent)', borderColor: 'rgba(16,185,129,0.3)' }}>
+          <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>🚀 Quick Start</h2>
+          <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>Pick a routine and log sets exercise by exercise</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {routines.map(r => {
               const exs = exercises.filter(e => r.exercise_ids?.includes(e.id));
@@ -129,15 +179,16 @@ export default function LogWorkout() {
                 <button
                   key={r.id}
                   onClick={() => startRoutine(r.id)}
-                  className="text-left p-4 rounded-xl bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-emerald-700 hover:scale-[1.02] hover:-translate-y-0.5 transition-all duration-200 group"
+                  className="text-left p-4 rounded-xl transition-all duration-200 group"
+                  style={{ backgroundColor: 'var(--bg-card-hover)', border: '1px solid var(--border)' }}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-gray-200 group-hover:text-emerald-400">{r.name}</span>
+                    <span className="font-medium group-hover:text-emerald-400" style={{ color: 'var(--text-secondary)' }}>{r.name}</span>
                     {r.day_of_week && (
-                      <span className="text-[10px] text-gray-600">📅 {r.day_of_week.slice(0, 3)}</span>
+                      <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>📅 {r.day_of_week.slice(0, 3)}</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mb-2">{exs.length} exercises</p>
+                  <p className="text-xs mb-2" style={{ color: 'var(--text-dim)' }}>{exs.length} exercises</p>
                   <div className="flex flex-wrap gap-1">
                     {Object.entries(groupCounts).slice(0, 4).map(([g, count]) => {
                       const mc = muscleColors[g];
@@ -153,7 +204,7 @@ export default function LogWorkout() {
             })}
           </div>
           <div className="mt-3 text-center">
-            <button onClick={startManual} className="text-sm text-gray-500 hover:text-gray-300">
+            <button onClick={startManual} className="text-sm" style={{ color: 'var(--text-dim)' }}>
               — or pick exercises manually —
             </button>
           </div>
@@ -162,18 +213,18 @@ export default function LogWorkout() {
 
       {!mode && routines.length === 0 && (
         <div className="text-center py-6">
-          <p className="text-gray-500 mb-2">No routines yet — pick exercises manually or create one first.</p>
+          <p className="mb-2" style={{ color: 'var(--text-dim)' }}>No routines yet — pick exercises manually or create one first.</p>
           <button onClick={startManual} className="btn-primary text-sm">Pick Exercises</button>
         </div>
       )}
 
       {mode === 'routine' && !routineDone && loggingExId && (
-        <div className="card border-emerald-800/30">
+        <div className="card" style={{ borderColor: 'rgba(16,185,129,0.3)' }}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-200">
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>
               {exercises.find(e => e.id == loggingExId)?.name || 'Log Exercise'}
             </h2>
-            <button onClick={() => setLoggingExId(null)} className="text-sm text-gray-500 hover:text-gray-300">← Back</button>
+            <button onClick={() => setLoggingExId(null)} className="text-sm" style={{ color: 'var(--text-dim)' }}>← Back</button>
           </div>
           <LogForm
             key={`${logKey}-${loggingExId}`}
@@ -187,10 +238,10 @@ export default function LogWorkout() {
       {mode === 'routine' && !routineDone && !loggingExId && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-200">
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>
               {routines.find(r => r.id === selectedRoutine)?.name || 'Routine'}
             </h2>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm" style={{ color: 'var(--text-dim)' }}>
               {completedExIds.length}/{routineExercises.length} logged
             </span>
           </div>
@@ -203,26 +254,27 @@ export default function LogWorkout() {
                   <div
                     key={ex.id}
                     className={`card !p-3 flex items-center justify-between transition-all duration-200 ${
-                      isDone ? 'opacity-60 border-emerald-800/40' : 'hover:border-gray-700'
+                      isDone ? 'opacity-60' : ''
                     }`}
+                    style={isDone ? { borderColor: 'rgba(16,185,129,0.3)' } : {}}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className={`w-8 h-8 rounded-lg ${mc?.bg || 'bg-gray-800'} flex items-center justify-center text-sm shrink-0`}>
                         {isDone ? '✅' : (mc?.emoji || '💪')}
                       </div>
                       <div className="min-w-0">
-                        <div className={`font-medium text-sm truncate ${isDone ? 'text-gray-500' : 'text-gray-200'}`}>
+                        <div className={`font-medium text-sm truncate ${isDone ? '' : ''}`} style={{ color: isDone ? 'var(--text-dim)' : 'var(--text-secondary)' }}>
                           {ex.name}
                         </div>
-                        <div className="text-[10px] text-gray-600">{ex.muscle_group} · {ex.category}</div>
+                        <div className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{ex.muscle_group} · {ex.category}</div>
                       </div>
                     </div>
                     {isDone ? (
-                      <span className="text-xs text-emerald-600 shrink-0">Logged ✓</span>
+                      <span className="text-xs shrink-0" style={{ color: 'var(--text-dim)' }}>Logged ✓</span>
                     ) : (
                       <button
                         onClick={() => setLoggingExId(ex.id)}
-                        className="btn-primary text-[10px] !px-3 !py-1.5 shrink-0 flex items-center gap-1 animate-[pulseGlow_2s_infinite]"
+                        className="btn-primary text-[10px] !px-3 !py-1.5 shrink-0 flex items-center gap-1 animate-glow"
                       >
                         <span>💪</span> Log
                       </button>
@@ -230,6 +282,13 @@ export default function LogWorkout() {
                   </div>
                 );
               })}
+              <button
+                onClick={startManual}
+                className="card !p-3 w-full text-sm flex items-center justify-center gap-1 hover:border-emerald-700 transition-colors"
+                style={{ color: 'var(--text-dim)' }}
+              >
+                <span>+</span> Add extra exercise
+              </button>
             </div>
           )}
         </div>
@@ -239,7 +298,7 @@ export default function LogWorkout() {
         <div className="card text-center py-8 space-y-3 animate-[fadeInUp_0.4s_ease-out]">
           <div className="text-4xl">🎉</div>
           <p className="text-emerald-400 font-semibold text-lg">Workout complete!</p>
-          <p className="text-gray-500 text-sm">{routineExercises.length} exercises logged</p>
+          <p className="text-sm" style={{ color: 'var(--text-dim)' }}>{routineExercises.length} exercises logged</p>
           <div className="flex gap-2 justify-center">
             <button onClick={exitToMenu} className="btn-primary text-sm">Done</button>
             <button onClick={() => { setCompletedExIds([]); setLoggingExId(null); }} className="btn-secondary text-sm">Log again</button>
@@ -270,12 +329,13 @@ export default function LogWorkout() {
                 key={logKey}
                 exercises={exercises.filter(e => selectedExercises.includes(e.id))}
                 onLogged={() => setLogKey(k => k + 1)}
+                onDraftChange={setHasDraftFlag}
               />
             </div>
           )}
 
           <div>
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs mb-2" style={{ color: 'var(--text-dim)' }}>
               {selectedExercises.length > 0
                 ? `✅ ${selectedExercises.length} selected — tap to toggle`
                 : 'Tap exercises below to select them for logging'}
@@ -285,8 +345,8 @@ export default function LogWorkout() {
                 <div key={group.label} className="animate-[fadeInUp_0.3s_ease-out]">
                   <div className={`flex items-center gap-2 mb-2 border-l-4 ${muscleColors[group.label]?.border || 'border-l-gray-600'} pl-3`}>
                     <span className="text-xs">{muscleColors[group.label]?.emoji || '•'}</span>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{group.label}</span>
-                    <span className="text-[10px] text-gray-700">({group.items.length})</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>{group.label}</span>
+                    <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>({group.items.length})</span>
                   </div>
                   <div className="space-y-1">
                     {group.items.map(ex => (
@@ -301,7 +361,7 @@ export default function LogWorkout() {
                 </div>
               ))}
               {filteredExercises.length === 0 && (
-                <p className="text-gray-500 text-sm text-center py-4">No exercises match your filters.</p>
+                <p className="text-sm text-center py-4" style={{ color: 'var(--text-dim)' }}>No exercises match your filters.</p>
               )}
             </div>
           </div>

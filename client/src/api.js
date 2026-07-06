@@ -56,6 +56,14 @@ export const api = {
   updateGoal: (id, data) => request(`/goals/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteGoal: (id) => request(`/goals/${id}`, { method: 'DELETE' }),
 
+  // Session targets
+  getTargets: (date) => {
+    const q = date ? `?date=${date}` : '';
+    return request(`/targets${q}`);
+  },
+  setTarget: (data) => request('/targets', { method: 'POST', body: JSON.stringify(data) }),
+  deleteTarget: (id) => request(`/targets/${id}`, { method: 'DELETE' }),
+
   // Stats
   getStats: () => request('/stats'),
 };
