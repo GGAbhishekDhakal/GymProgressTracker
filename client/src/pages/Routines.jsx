@@ -29,6 +29,18 @@ const templates = [
 
 const todayIndex = new Date().getDay();
 const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][todayIndex];
+const todayDateNum = new Date().getDate();
+const weekDates = (() => {
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  const diffToMonday = (now.getDay() + 6) % 7;
+  startOfWeek.setDate(now.getDate() - diffToMonday);
+  return dayNames.map((_, i) => {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    return d.getDate();
+  });
+})();
 
 export default function Routines() {
   const navigate = useNavigate();
@@ -47,6 +59,7 @@ export default function Routines() {
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [exerciseOrder, setExerciseOrder] = useState([]);
   const [showMenu, setShowMenu] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   function loadData() {
     Promise.all([api.getRoutines(), api.getExercises()])
@@ -123,6 +136,7 @@ export default function Routines() {
     setEditing(null);
     setEditRoutine(null);
     setShowMenu(null);
+    setConfirmDelete(null);
   }
 
   function clearForm() {
@@ -196,14 +210,16 @@ export default function Routines() {
     }
   }
 
-  async function handleDelete(id) {
-    if (!confirm('Delete this routine?')) return;
+  async function handleConfirmDelete() {
+    if (!confirmDelete) return;
     try {
-      await api.deleteRoutine(id);
+      await api.deleteRoutine(confirmDelete);
+      setConfirmDelete(null);
       flashSuccess('Routine deleted');
       loadData();
     } catch (err) {
       alert(err.message);
+      setConfirmDelete(null);
     }
   }
 
@@ -254,6 +270,24 @@ export default function Routines() {
         </div>
       )}
 
+      {confirmDelete && (
+        <div className="animate-[fadeInUp_0.3s_ease-out] bg-red-900/30 border border-red-700/40 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🗑️</span>
+            <div>
+              <p className="text-sm text-gray-200 font-medium">Delete routine?</p>
+              <p className="text-xs text-gray-500">
+                "{routines.find(r => r.id === confirmDelete)?.name}" and all its data will be permanently removed.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setConfirmDelete(null)} className="btn-secondary text-xs">Cancel</button>
+            <button onClick={handleConfirmDelete} className="btn-danger text-xs">Delete</button>
+          </div>
+        </div>
+      )}
+
       {routines.length > 0 && (
         <div className="card border-gray-700/50">
           <div className="flex items-center justify-between mb-3">
@@ -271,8 +305,11 @@ export default function Routines() {
               const isToday = fullName === todayName;
               return (
                 <div key={fullName} className="text-center">
-                  <div className={`text-[10px] font-semibold uppercase mb-1 ${isToday ? 'text-emerald-400' : 'text-gray-600'}`}>
+                  <div className={`text-[10px] font-semibold uppercase mb-0.5 ${isToday ? 'text-emerald-400' : 'text-gray-600'}`}>
                     {abbr}
+                  </div>
+                  <div className={`text-[9px] font-medium mb-1 ${isToday ? 'text-emerald-300' : 'text-gray-700'}`}>
+                    {weekDates[i]}
                   </div>
                   <div className={`relative rounded-lg py-1.5 ${isToday ? 'bg-emerald-900/30 ring-1 ring-emerald-700/50' : 'bg-gray-800/50'}`}>
                     {dayRoutines.length === 0 ? (
@@ -410,10 +447,10 @@ export default function Routines() {
                         {sel}/{total}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    <div className="space-y-0.5">
                       {groupExs.map(ex => (
                         <label key={ex.id} className={`flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer transition-all ${
-                          selectedSet.has(ex.id) ? `${mc?.bg} ring-1 ring-emerald-600/30 scale-[1.01]` : 'hover:bg-gray-800 hover:scale-[1.01]'
+                          selectedSet.has(ex.id) ? `${mc?.bg} ring-1 ring-emerald-600/30` : 'hover:bg-gray-800'
                         }`}>
                           <input
                             type="checkbox"
@@ -421,9 +458,11 @@ export default function Routines() {
                             onChange={() => toggleExercise(ex.id)}
                             className="rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500 shrink-0"
                           />
-                          <span className="text-xs">{mc?.emoji || '•'}</span>
-                          <span className={`text-sm ${selectedSet.has(ex.id) ? 'text-gray-200' : 'text-gray-400'}`}>{ex.name}</span>
-                          <span className={`text-[10px] ml-auto ${mc?.text || 'text-gray-600'}`}>{ex.category}</span>
+                          <span className="text-xs shrink-0">{mc?.emoji || '•'}</span>
+                          <span className={`text-sm truncate flex-1 ${selectedSet.has(ex.id) ? 'text-gray-200' : 'text-gray-400'}`}>
+                            {ex.name}
+                          </span>
+                          <span className={`text-[10px] shrink-0 ${mc?.text || 'text-gray-600'}`}>{ex.category}</span>
                         </label>
                       ))}
                     </div>
@@ -444,8 +483,8 @@ export default function Routines() {
                     <div key={id} className="flex items-center gap-2 bg-gray-800/50 rounded-lg px-3 py-2">
                       <span className="text-xs text-gray-600 w-6">{i + 1}</span>
                       <span className="text-xs mr-1">{mc?.emoji || '•'}</span>
-                      <span className="flex-1 text-sm text-gray-200">{ex?.name}</span>
-                      <span className={`text-[10px] ${mc?.text || 'text-gray-600'} w-16`}>{ex?.muscle_group}</span>
+                      <span className="flex-1 text-sm text-gray-200 truncate">{ex?.name}</span>
+                      <span className={`text-[10px] ${mc?.text || 'text-gray-600'} w-16 text-right`}>{ex?.muscle_group}</span>
                       <button type="button" onClick={() => moveUp(i)} disabled={i === 0} className="text-gray-600 hover:text-gray-300 disabled:opacity-30 text-sm">▲</button>
                       <button type="button" onClick={() => moveDown(i)} disabled={i >= orderedExercises.length - 1} className="text-gray-600 hover:text-gray-300 disabled:opacity-30 text-sm">▼</button>
                     </div>
@@ -509,7 +548,7 @@ export default function Routines() {
                         <button onClick={() => { openEdit(routine); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2">
                           <span>✏️</span> Edit
                         </button>
-                        <button onClick={() => { handleDelete(routine.id); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-gray-700 flex items-center gap-2">
+                        <button onClick={() => { setConfirmDelete(routine.id); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-gray-700 flex items-center gap-2">
                           <span>🗑️</span> Delete
                         </button>
                       </div>
