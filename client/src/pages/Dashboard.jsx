@@ -304,15 +304,10 @@ export default function Dashboard() {
                     </div>
                     <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{volume.toLocaleString()}kg</span>
                   </div>
-                  <div className="space-y-0.5">
-                    {data.sets.map((set, i) => (
-                      <div key={set.id} className="flex items-center gap-2 text-xs">
-                        <span className="w-5" style={{ color: 'var(--text-faint)' }}>S{i + 1}</span>
-                        <span className="text-emerald-400 font-medium">{Number(set.weight).toFixed(1)}kg</span>
-                        <span style={{ color: 'var(--text-dim)' }}>× {set.reps}</span>
-                        {set.notes && <span className="text-xs italic" style={{ color: 'var(--text-faint)' }}>— {set.notes}</span>}
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--text-dim)' }}>
+                    <span>🏆 PR: <span className="font-semibold text-emerald-400">{Math.max(...data.sets.map(s => Number(s.weight))).toFixed(1)}kg</span></span>
+                    <span>📦 Vol: <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{data.sets.reduce((sum, s) => sum + (Number(s.weight) || 0) * (s.reps || 1), 0).toLocaleString()}kg</span></span>
+                    <span>{data.sets.length} set{data.sets.length !== 1 ? 's' : ''}</span>
                   </div>
                 </div>
               );

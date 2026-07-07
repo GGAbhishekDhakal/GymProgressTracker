@@ -20,7 +20,7 @@ function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch {}
 }
 
-export default function LogForm({ exercises, onLogged, defaultExerciseId, onDraftChange }) {
+export default function LogForm({ exercises, onLogged, defaultExerciseId, onDraftChange, loggedToday }) {
   const [currentEx, setCurrentEx] = useState(null);
   const [sets, setSets] = useState([{ weight: '', reps: '10' }]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -133,6 +133,11 @@ export default function LogForm({ exercises, onLogged, defaultExerciseId, onDraf
 
     const validSets = sets.filter(s => s.weight !== '' && s.weight > 0);
     if (validSets.length === 0) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    if (date === today && loggedToday && loggedToday.includes(currentEx.id)) {
+      if (!window.confirm(`${currentEx.name} is already logged today. Log another entry anyway?`)) return;
+    }
 
     setSaving(true);
     try {

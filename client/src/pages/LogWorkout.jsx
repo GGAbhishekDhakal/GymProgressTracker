@@ -49,7 +49,14 @@ export default function LogWorkout() {
   const [showFinishConfirm, setShowFinishConfirm] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryData, setSummaryData] = useState(null);
+  const [todayLoggedExIds, setTodayLoggedExIds] = useState(new Set());
+  const [incompleteExs, setIncompleteExs] = useState([]);
   const finishCalled = useRef(false);
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayDayName = dayNames[new Date().getDay()];
+  const todayRoutine = routines.find(r => r.day_of_week === todayDayName);
 
   useEffect(() => {
     setShowDraftBanner(hasDraft());
@@ -59,31 +66,41 @@ export default function LogWorkout() {
     Promise.all([
       api.getExercises(),
       api.getRoutines(),
-    ]).then(([exData, rtData]) => {
+      api.getLogs({ from: todayStr, to: todayStr }),
+    ]).then(([exData, rtData, tdLogs]) => {
       setExercises(exData);
       setRoutines(rtData);
+      const loggedSet = new Set(tdLogs.map(l => l.exercise_id));
+      setTodayLoggedExIds(loggedSet);
+
       const routineParam = searchParams.get('routine');
       if (routineParam && rtData.length > 0) {
         const rt = rtData.find(r => r.id === parseInt(routineParam));
         if (rt) {
-          startRoutineInternal(rt);
+          startRoutineInternal(rt, exData, loggedSet);
           setMode('routine');
         }
       }
     }).finally(() => setLoading(false));
   }, []);
 
-  function startRoutineInternal(rt) {
+  function startRoutineInternal(rt, exsOverride, loggedSet) {
+    const exs = exsOverride
+      ? exsOverride.filter(e => rt.exercise_ids?.includes(e.id))
+      : exercises.filter(e => rt.exercise_ids?.includes(e.id));
     setSelectedRoutine(rt.id);
-    setCompletedExIds([]);
+    setRoutineExercises(exs);
+    const alreadyLogged = (loggedSet || todayLoggedExIds);
+    setCompletedExIds(prev => {
+      const merged = new Set([...prev, ...exs.filter(e => alreadyLogged.has(e.id)).map(e => e.id)]);
+      return [...merged];
+    });
     setSkippedExIds([]);
     setLoggingExId(null);
-    setStartedAt(new Date());
+    setStartedAt(prev => prev || new Date());
     setShowSummary(false);
     setShowFinishConfirm(false);
     finishCalled.current = false;
-    const exs = exercises.filter(e => rt.exercise_ids?.includes(e.id));
-    setRoutineExercises(exs);
   }
 
   function startRoutine(id) {
@@ -109,6 +126,7 @@ export default function LogWorkout() {
   function handleLogged() {
     if (loggingExId) {
       setCompletedExIds(prev => [...new Set([...prev, loggingExId])]);
+      setTodayLoggedExIds(prev => new Set([...prev, loggingExId]));
     }
     setLoggingExId(null);
     setLogKey(k => k + 1);
@@ -116,10 +134,6 @@ export default function LogWorkout() {
 
   function handleSkip(exId) {
     setSkippedExIds(prev => [...new Set([...prev, exId])]);
-  }
-
-  function handleUnskip(exId) {
-    setSkippedExIds(prev => prev.filter(id => id !== exId));
   }
 
   function exitToMenu() {
@@ -132,6 +146,7 @@ export default function LogWorkout() {
     setStartedAt(null);
     setShowSummary(false);
     setShowFinishConfirm(false);
+    setSelectedExercises([]);
     finishCalled.current = false;
   }
 
@@ -145,11 +160,20 @@ export default function LogWorkout() {
     setShowDraftBanner(false);
   }
 
-  function handleFinishClick() {
-    const incomplete = routineExercises.filter(
-      ex => !completedExIds.includes(ex.id) && !skippedExIds.includes(ex.id)
-    );
-    if (incomplete.length > 0) {
+  async function handleFinishClick() {
+    let currentIncomplete;
+    if (mode === 'routine') {
+      currentIncomplete = routineExercises.filter(
+        ex => !completedExIds.includes(ex.id) && !skippedExIds.includes(ex.id) && !todayLoggedExIds.has(ex.id)
+      );
+    } else {
+      currentIncomplete = exercises.filter(
+        ex => selectedExercises.includes(ex.id) && !todayLoggedExIds.has(ex.id)
+      );
+    }
+
+    if (currentIncomplete.length > 0) {
+      setIncompleteExs(currentIncomplete);
       setShowFinishConfirm(true);
     } else {
       finishWorkout();
@@ -167,20 +191,29 @@ export default function LogWorkout() {
       ? `${Math.floor(minutes / 60)}h ${minutes % 60}m`
       : `${minutes}m`;
 
-    const completeExs = routineExercises.filter(ex => completedExIds.includes(ex.id));
-    const skipExs = routineExercises.filter(ex => skippedExIds.includes(ex.id));
-    const allSkippedExIds = [...new Set([
-      ...skippedExIds,
-      ...routineExercises.filter(ex => !completedExIds.includes(ex.id) && !skippedExIds.includes(ex.id)).map(ex => ex.id)
-    ])];
-    setSkippedExIds(allSkippedExIds);
+    let exsDone, exsSkipped, setsLogged;
+    if (mode === 'routine') {
+      const completeExs = routineExercises.filter(ex => completedExIds.includes(ex.id));
+      const allSkipped = [...new Set([
+        ...skippedExIds,
+        ...incompleteExs.map(ex => ex.id)
+      ])];
+      setSkippedExIds(allSkipped);
+      exsDone = completeExs.length;
+      exsSkipped = allSkipped.length;
+      setsLogged = completedExIds.length;
+    } else {
+      exsDone = [...todayLoggedExIds].length;
+      exsSkipped = 0;
+      setsLogged = exsDone;
+    }
 
     const data = {
-      routineName: routines.find(r => r.id === selectedRoutine)?.name || 'Workout',
-      setsLogged: completedExIds.length,
-      exercisesDone: completeExs.length,
-      exercisesSkipped: allSkippedExIds.length,
-      totalExercises: routineExercises.length,
+      routineName: mode === 'routine' ? (routines.find(r => r.id === selectedRoutine)?.name || 'Workout') : 'Manual Workout',
+      setsLogged,
+      exercisesDone: exsDone,
+      exercisesSkipped: exsSkipped,
+      totalExercises: mode === 'routine' ? routineExercises.length : exsDone,
       duration: durationStr,
       completedAt: now.toISOString(),
     };
@@ -206,12 +239,12 @@ export default function LogWorkout() {
   const routineDone = mode === 'routine' && showSummary === false
     && routineExercises.length > 0
     && routineExercises.every(ex => completedExIds.includes(ex.id) || skippedExIds.includes(ex.id))
-    && completedExIds.length > 0
     && !showFinishConfirm;
   const todayFormatted = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
-  const numLogged = completedExIds.length + skippedExIds.length;
+  const numLogged = mode === 'routine' ? completedExIds.length + skippedExIds.length : 0;
   const totalRoutineExs = routineExercises.length;
+  const manualLogged = [...todayLoggedExIds].filter(id => selectedExercises.includes(id)).length;
 
   return (
     <div className="space-y-6">
@@ -220,24 +253,30 @@ export default function LogWorkout() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--overlay)' }}>
           <div className="card max-w-md w-full space-y-4 animate-[fadeInUp_0.2s_ease-out]">
             <h3 className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>Finish Workout?</h3>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              You still have incomplete exercises:
-            </p>
-            <ul className="space-y-1">
-              {routineExercises
-                .filter(ex => !completedExIds.includes(ex.id) && !skippedExIds.includes(ex.id))
-                .map(ex => (
-                  <li key={ex.id} className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                    <span>{muscleColors[ex.muscle_group]?.emoji || '•'}</span>
-                    {ex.name}
-                  </li>
-                ))}
-            </ul>
-            <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
-              Unfinished exercises will be marked as skipped.
-            </p>
+            {incompleteExs.length > 0 ? (
+              <>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  You still have incomplete exercises:
+                </p>
+                <ul className="space-y-1">
+                  {incompleteExs.map(ex => (
+                    <li key={ex.id} className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                      <span>{muscleColors[ex.muscle_group]?.emoji || '•'}</span>
+                      {ex.name}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
+                  Unfinished exercises will be marked as skipped.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                Ready to finish your workout?
+              </p>
+            )}
             <div className="flex gap-2 justify-end pt-2">
-              <button onClick={() => setShowFinishConfirm(false)} className="btn-secondary text-sm">Go Back</button>
+              <button onClick={() => { setShowFinishConfirm(false); setIncompleteExs([]); }} className="btn-secondary text-sm">Go Back</button>
               <button onClick={finishWorkout} className="btn-primary text-sm">Finish Anyway</button>
             </div>
           </div>
@@ -262,18 +301,20 @@ export default function LogWorkout() {
                 <div className="stat-value text-lg">{summaryData.exercisesDone}</div>
                 <div className="stat-label text-[10px]">Exercises</div>
               </div>
-              <div className="stat-card !py-3">
-                <div className="stat-value text-lg" style={{ color: summaryData.exercisesSkipped > 0 ? '#f59e0b' : undefined }}>{summaryData.exercisesSkipped}</div>
-                <div className="stat-label text-[10px]">Skipped</div>
-              </div>
+              {summaryData.exercisesSkipped > 0 && (
+                <div className="stat-card !py-3">
+                  <div className="stat-value text-lg" style={{ color: '#f59e0b' }}>{summaryData.exercisesSkipped}</div>
+                  <div className="stat-label text-[10px]">Skipped</div>
+                </div>
+              )}
               <div className="stat-card !py-3">
                 <div className="stat-value text-lg">{summaryData.duration}</div>
                 <div className="stat-label text-[10px]">Duration</div>
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={exitToMenu} className="btn-primary flex-1 text-sm">View Dashboard</button>
-              <button onClick={() => { exitToMenu(); navigate('/'); }} className="btn-secondary flex-1 text-sm">Done</button>
+              <button onClick={() => { exitToMenu(); navigate('/'); }} className="btn-primary flex-1 text-sm">Dashboard</button>
+              <button onClick={exitToMenu} className="btn-secondary flex-1 text-sm">Done</button>
             </div>
           </div>
         </div>
@@ -305,57 +346,84 @@ export default function LogWorkout() {
         </div>
       )}
 
-      {!mode && routines.length > 0 && (
+      {!mode && (
         <div className="card" style={{ backgroundImage: 'linear-gradient(to right, rgba(16,185,129,0.08), transparent)', borderColor: 'rgba(16,185,129,0.3)' }}>
           <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>🚀 Quick Start</h2>
           <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>Pick a routine and log sets exercise by exercise</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {routines.map(r => {
-              const exs = exercises.filter(e => r.exercise_ids?.includes(e.id));
-              const groupCounts = {};
-              for (const ex of exs) {
-                groupCounts[ex.muscle_group] = (groupCounts[ex.muscle_group] || 0) + 1;
-              }
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => startRoutine(r.id)}
-                  className="text-left p-4 rounded-xl transition-all duration-200 group"
-                  style={{ backgroundColor: 'var(--bg-card-hover)', border: '1px solid var(--border)' }}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium group-hover:text-emerald-400" style={{ color: 'var(--text-secondary)' }}>{r.name}</span>
-                    {r.day_of_week && (
-                      <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>📅 {r.day_of_week.slice(0, 3)}</span>
-                    )}
-                  </div>
-                  <p className="text-xs mb-2" style={{ color: 'var(--text-dim)' }}>{exs.length} exercises</p>
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(groupCounts).slice(0, 4).map(([g, count]) => {
-                      const mc = muscleColors[g];
-                      return (
-                        <span key={g} className={`text-[10px] px-1.5 py-0.5 rounded-full ${mc?.bg || 'bg-gray-700'} ${mc?.text || 'text-gray-400'}`}>
-                          {mc?.emoji || ''} {count}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-3 text-center">
-            <button onClick={startManual} className="text-sm" style={{ color: 'var(--text-dim)' }}>
-              — or pick exercises manually —
-            </button>
-          </div>
-        </div>
-      )}
 
-      {!mode && routines.length === 0 && (
-        <div className="text-center py-6">
-          <p className="mb-2" style={{ color: 'var(--text-dim)' }}>No routines yet — pick exercises manually or create one first.</p>
-          <button onClick={startManual} className="btn-primary text-sm">Pick Exercises</button>
+          {/* Today's Workout card */}
+          {todayRoutine && (
+            <div className="mb-3 rounded-xl p-4 flex items-center justify-between" style={{ backgroundImage: 'linear-gradient(to right, rgba(16,185,129,0.15), rgba(59,130,246,0.1))', border: '1px solid rgba(16,185,129,0.3)' }}>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📅</span>
+                <div>
+                  <p className="text-xs" style={{ color: 'var(--text-dim)' }}>Today's Workout</p>
+                  <p className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{todayRoutine.name}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
+                    {exercises.filter(e => todayRoutine.exercise_ids?.includes(e.id)).length} exercises
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => startRoutine(todayRoutine.id)}
+                className="btn-primary text-sm flex items-center gap-1"
+              >
+                <span>▶</span> Start
+              </button>
+            </div>
+          )}
+
+          {routines.length > 0 && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {routines.map(r => {
+                  const exs = exercises.filter(e => r.exercise_ids?.includes(e.id));
+                  const groupCounts = {};
+                  for (const ex of exs) {
+                    groupCounts[ex.muscle_group] = (groupCounts[ex.muscle_group] || 0) + 1;
+                  }
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => startRoutine(r.id)}
+                      className="text-left p-4 rounded-xl transition-all duration-200 group"
+                      style={{ backgroundColor: 'var(--bg-card-hover)', border: '1px solid var(--border)' }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium group-hover:text-emerald-400" style={{ color: 'var(--text-secondary)' }}>{r.name}</span>
+                        {r.day_of_week && (
+                          <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>📅 {r.day_of_week.slice(0, 3)}</span>
+                        )}
+                      </div>
+                      <p className="text-xs mb-2" style={{ color: 'var(--text-dim)' }}>{exs.length} exercises</p>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(groupCounts).slice(0, 4).map(([g, count]) => {
+                          const mc = muscleColors[g];
+                          return (
+                            <span key={g} className={`text-[10px] px-1.5 py-0.5 rounded-full ${mc?.bg || 'bg-gray-700'} ${mc?.text || 'text-gray-400'}`}>
+                              {mc?.emoji || ''} {count}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-3 text-center">
+                <button onClick={startManual} className="text-sm" style={{ color: 'var(--text-dim)' }}>
+                  — or pick exercises manually —
+                </button>
+              </div>
+            </>
+          )}
+
+          {routines.length === 0 && (
+            <div className="text-center py-4">
+              <p className="mb-2" style={{ color: 'var(--text-dim)' }}>No routines yet — pick exercises manually or create one first.</p>
+              <button onClick={startManual} className="btn-primary text-sm">Pick Exercises</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -372,6 +440,7 @@ export default function LogWorkout() {
             exercises={exercises}
             defaultExerciseId={loggingExId}
             onLogged={handleLogged}
+            loggedToday={todayLoggedExIds}
           />
         </div>
       )}
@@ -391,7 +460,6 @@ export default function LogWorkout() {
               {routineExercises.map((ex) => {
                 const isDone = completedExIds.includes(ex.id);
                 const isSkipped = skippedExIds.includes(ex.id);
-                const isPending = !isDone && !isSkipped;
                 const mc = muscleColors[ex.muscle_group];
                 return (
                   <div
@@ -406,7 +474,7 @@ export default function LogWorkout() {
                         {isDone ? '✅' : isSkipped ? '⏭' : (mc?.emoji || '💪')}
                       </div>
                       <div className="min-w-0">
-                        <div className={`font-medium text-sm truncate`} style={{ color: isDone || isSkipped ? 'var(--text-dim)' : 'var(--text-secondary)' }}>
+                        <div className="font-medium text-sm truncate" style={{ color: isDone || isSkipped ? 'var(--text-dim)' : 'var(--text-secondary)' }}>
                           {ex.name}
                         </div>
                         <div className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{ex.muscle_group} · {ex.category}</div>
@@ -440,7 +508,6 @@ export default function LogWorkout() {
                 );
               })}
 
-              {/* Add extra exercise */}
               <button
                 onClick={startManual}
                 className="card !p-3 w-full text-sm flex items-center justify-center gap-1 hover:border-emerald-700 transition-colors"
@@ -449,12 +516,8 @@ export default function LogWorkout() {
                 <span>+</span> Add extra exercise
               </button>
 
-              {/* Finish button */}
               {numLogged > 0 && (
-                <button
-                  onClick={handleFinishClick}
-                  className="btn-primary w-full text-sm py-3"
-                >
+                <button onClick={handleFinishClick} className="btn-primary w-full text-sm py-3">
                   🎯 Finish Workout
                 </button>
               )}
@@ -463,7 +526,6 @@ export default function LogWorkout() {
         </div>
       )}
 
-      {/* Auto-complete fallback (when all done without finish) */}
       {routineDone && (
         <div className="card text-center py-8 space-y-3 animate-[fadeInUp_0.4s_ease-out]">
           <div className="text-4xl">🎉</div>
@@ -497,9 +559,16 @@ export default function LogWorkout() {
               <LogForm
                 key={logKey}
                 exercises={exercises.filter(e => selectedExercises.includes(e.id))}
-                onLogged={() => setLogKey(k => k + 1)}
+                onLogged={() => { setLogKey(k => k + 1); setTodayLoggedExIds(prev => new Set([...prev, ...selectedExercises])); }}
+                loggedToday={todayLoggedExIds}
               />
             </div>
+          )}
+
+          {manualLogged > 0 && (
+            <button onClick={handleFinishClick} className="btn-primary w-full text-sm py-3">
+              🎯 Finish Workout
+            </button>
           )}
 
           <div>
