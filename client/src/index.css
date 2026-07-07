@@ -23,7 +23,7 @@
   --sidebar-collapsed: 64px;
 }
 
-html.light {
+html:not(.dark) {
   --bg-body: #f3f4f6;
   --bg-body-secondary: #e5e7eb;
   --bg-card: rgba(255, 255, 255, 0.9);
@@ -51,19 +51,19 @@ html.light {
                       radial-gradient(ellipse at 80% 50%, rgba(52, 211, 153, 0.02) 0%, transparent 50%);
   }
 
-  html.light body {
+  html:not(.dark) body {
     background-image: radial-gradient(ellipse at 20% 50%, rgba(16, 185, 129, 0.04) 0%, transparent 50%),
                       radial-gradient(ellipse at 80% 50%, rgba(52, 211, 153, 0.03) 0%, transparent 50%);
   }
 
-  html.light .text-gray-200 { color: #1f2937; }
-  html.light .text-gray-300 { color: #374151; }
-  html.light .text-gray-400 { color: #6b7280; }
-  html.light .text-gray-500 { color: #9ca3af; }
-  html.light .text-gray-600 { color: #9ca3af; }
-  html.light .bg-gray-800 { background-color: #e5e7eb; }
-  html.light .bg-gray-800\/50 { background-color: rgba(229, 231, 235, 0.5); }
-  html.light .bg-gray-900\/50 { background-color: #f9fafb; }
+  html:not(.dark) .text-gray-200 { color: #1f2937; }
+  html:not(.dark) .text-gray-300 { color: #374151; }
+  html:not(.dark) .text-gray-400 { color: #6b7280; }
+  html:not(.dark) .text-gray-500 { color: #9ca3af; }
+  html:not(.dark) .text-gray-600 { color: #9ca3af; }
+  html:not(.dark) .bg-gray-800 { background-color: #e5e7eb; }
+  html:not(.dark) .bg-gray-800\/50 { background-color: rgba(229, 231, 235, 0.5); }
+  html:not(.dark) .bg-gray-900\/50 { background-color: #f9fafb; }
 
   input, select, textarea {
     background-color: var(--bg-input);
@@ -177,6 +177,9 @@ html.light {
 .stat-value { animation: countUp 0.4s ease-out 0.3s both; }
 .card { animation: fadeInUp 0.3s ease-out both; }
 .animate-glow { animation: pulseGlow 2s infinite; }
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
 @media (min-width: 1024px) {
   .main-content {

@@ -228,11 +228,11 @@ export default function LogForm({ exercises, onLogged, defaultExerciseId, onDraf
         <input
           type="number"
           min="0"
-          step="50"
+          step="0.5"
           value={targetVolume}
           onChange={(e) => setTargetVolume(e.target.value)}
           placeholder="0"
-          className="!py-0.5 !px-1.5 w-20 text-xs"
+          className="!py-0.5 !px-1.5 w-28 text-xs"
         />
         <span>kg</span>
         <span className="ml-1">Reps:</span>

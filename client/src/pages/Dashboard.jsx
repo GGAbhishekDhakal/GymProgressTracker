@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import ProgressChart from '../components/ProgressChart';
+import AccumulatedProgressChart from '../components/AccumulatedProgressChart';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
@@ -16,6 +17,8 @@ const lastOfMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 
 const monthName = todayDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 const monthStartDay = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1).getDay();
 const daysInMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate();
+
+const SUMMARY_KEY = 'lastWorkoutSummary';
 
 const muscleColors = {
   Chest: { emoji: '🦍', border: 'border-l-red-500/40', text: 'text-red-400' },
@@ -36,8 +39,29 @@ export default function Dashboard() {
   const [goals, setGoals] = useState([]);
   const [selectedCalendarDay, setSelectedCalendarDay] = useState(null);
   const [selectedExercise, setSelectedExercise] = useState(null);
+  const [lastSummary, setLastSummary] = useState(null);
 
   const todayRoutine = routines.find(r => r.day_of_week === todayDayName);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SUMMARY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const completedDate = new Date(parsed.completedAt).toISOString().split('T')[0];
+        if (completedDate === todayStr) {
+          setLastSummary(parsed);
+        } else {
+          localStorage.removeItem(SUMMARY_KEY);
+        }
+      }
+    } catch {}
+  }, []);
+
+  function dismissSummary() {
+    setLastSummary(null);
+    try { localStorage.removeItem(SUMMARY_KEY); } catch {}
+  }
 
   useEffect(() => {
     Promise.all([
@@ -104,22 +128,53 @@ export default function Dashboard() {
 
   const calendarDays = [];
   for (let i = 1; i <= daysInMonth; i++) {
-    const dateStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
     calendarDays.push(i);
   }
 
   if (loading) return <LoadingSpinner />;
 
+  const activityEntries = Object.entries(todayActivity);
+
   return (
     <div className="space-y-4">
+      {/* Workout summary banner */}
+      {lastSummary && (
+        <div className="card animate-[fadeInUp_0.3s_ease-out] relative overflow-hidden" style={{ borderColor: 'rgba(16,185,129,0.4)', backgroundImage: 'linear-gradient(to right, rgba(16,185,129,0.08), transparent)' }}>
+          <button onClick={dismissSummary} className="absolute top-2 right-2 text-sm" style={{ color: 'var(--text-dim)' }}>✕</button>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🎉</span>
+            <div className="flex-1">
+              <p className="font-semibold text-sm" style={{ color: 'var(--text-secondary)' }}>Workout Complete!</p>
+              <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{lastSummary.routineName} · {lastSummary.duration}</p>
+            </div>
+            <div className="flex gap-3 text-center">
+              <div>
+                <div className="text-sm font-bold text-emerald-400">{lastSummary.setsLogged}</div>
+                <div className="text-[9px]" style={{ color: 'var(--text-dim)' }}>Sets</div>
+              </div>
+              <div>
+                <div className="text-sm font-bold text-emerald-400">{lastSummary.exercisesDone}</div>
+                <div className="text-[9px]" style={{ color: 'var(--text-dim)' }}>Exs</div>
+              </div>
+              {lastSummary.exercisesSkipped > 0 && (
+                <div>
+                  <div className="text-sm font-bold" style={{ color: '#f59e0b' }}>{lastSummary.exercisesSkipped}</div>
+                  <div className="text-[9px]" style={{ color: 'var(--text-dim)' }}>Skip</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{timeGreeting}!</h1>
-          <p className="text-sm text-gray-500">{todayFormatted}</p>
+          <p className="text-sm" style={{ color: 'var(--text-dim)' }}>{todayFormatted}</p>
         </div>
         <div className="flex items-center gap-2">
           {streakDays > 0 && (
-            <span className="text-xs bg-orange-900/30 text-orange-400 px-2 py-1 rounded-full border border-orange-800/30 flex items-center gap-1">
+            <span className="text-xs px-2 py-1 rounded-full flex items-center gap-1" style={{ backgroundColor: 'rgba(234,88,12,0.3)', color: '#fb923c', border: '1px solid rgba(234,88,12,0.3)' }}>
               🔥 {streakDays}d
             </span>
           )}
@@ -148,12 +203,12 @@ export default function Dashboard() {
       </div>
 
       {todayRoutine && (
-        <div className="bg-gradient-to-r from-emerald-900/30 to-blue-900/20 border border-emerald-800/40 rounded-xl p-3 flex items-center justify-between">
+        <div className="rounded-xl p-3 flex items-center justify-between" style={{ backgroundImage: 'linear-gradient(to right, rgba(16,185,129,0.15), rgba(59,130,246,0.1))', border: '1px solid rgba(16,185,129,0.3)' }}>
           <div className="flex items-center gap-2">
             <span className="text-lg">📅</span>
             <div>
-              <span className="text-xs text-gray-500">Today's routine</span>
-              <p className="font-semibold text-gray-200 text-sm">{todayRoutine.name}</p>
+              <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Today's routine</span>
+              <p className="font-semibold text-sm" style={{ color: 'var(--text-secondary)' }}>{todayRoutine.name}</p>
             </div>
           </div>
           <button onClick={() => navigate(`/log?routine=${todayRoutine.id}`)} className="btn-primary text-xs flex items-center gap-1">
@@ -162,11 +217,11 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="card border-gray-700/50">
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{monthName}</h2>
+      <div className="card" style={{ borderColor: 'var(--border)' }}>
+        <h2 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>{monthName}</h2>
         <div className="grid grid-cols-7 gap-0.5 text-center">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-            <div key={d} className="text-[9px] text-gray-600 font-semibold py-1">{d}</div>
+            <div key={d} className="text-[9px] font-semibold py-1" style={{ color: 'var(--text-faint)' }}>{d}</div>
           ))}
           {Array.from({ length: monthStartDay }).map((_, i) => (
             <div key={`blank-${i}`} />
@@ -176,18 +231,18 @@ export default function Dashboard() {
             const isToday = dateStr === todayStr;
             const hasLogs = loggedDates.has(dateStr);
             const isSelected = selectedCalendarDay === dateStr;
-            const summary = isSelected ? getDaySummary(dateStr) : null;
             return (
               <div key={day} className="relative">
                 <button
                   onClick={() => setSelectedCalendarDay(isSelected ? null : dateStr)}
                   className={`w-full rounded-lg py-1 text-xs font-medium transition-all ${
                     isToday
-                      ? 'bg-emerald-900/40 text-emerald-300 ring-1 ring-emerald-700/50'
+                      ? 'text-emerald-300 ring-1 ring-emerald-700/50'
                       : isSelected
-                        ? 'bg-gray-700/50 text-gray-200'
-                        : 'text-gray-500 hover:bg-gray-800/50'
+                        ? 'text-gray-200'
+                        : 'hover:bg-gray-800/40'
                   }`}
+                  style={isToday ? { backgroundColor: 'rgba(6,78,59,0.4)' } : isSelected ? { backgroundColor: 'var(--bg-card-hover)' } : { color: 'var(--text-dim)' }}
                 >
                   {day}
                   {hasLogs && !isToday && (
@@ -232,29 +287,30 @@ export default function Dashboard() {
         })()}
       </div>
 
-      {todayLogs.length > 0 && (
+      {/* Today's Activity — Carousel */}
+      {activityEntries.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-gray-300 mb-2">Today's Activity</h2>
-          <div className="space-y-2">
-            {Object.entries(todayActivity).map(([name, data]) => {
+          <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Today's Activity</h2>
+          <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4 scrollbar-hide">
+            {activityEntries.map(([name, data]) => {
               const mc = muscleColors[data.muscle] || {};
               const volume = data.sets.reduce((sum, s) => sum + (Number(s.weight) || 0) * (s.reps || 1), 0);
               return (
-                <div key={name} className={`card !p-3 border-l-4 ${mc.border || 'border-l-gray-600'}`}>
+                <div key={name} className={`snap-start shrink-0 w-72 card !p-3 border-l-4 ${mc.border || 'border-l-gray-600'}`}>
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">
                       <span>{mc.emoji || '💪'}</span>
-                      <span className="font-medium text-sm text-gray-200">{name}</span>
+                      <span className="font-medium text-sm" style={{ color: 'var(--text-secondary)' }}>{name}</span>
                     </div>
-                    <span className="text-xs text-gray-500">{volume.toLocaleString()}kg</span>
+                    <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{volume.toLocaleString()}kg</span>
                   </div>
                   <div className="space-y-0.5">
                     {data.sets.map((set, i) => (
                       <div key={set.id} className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-600 w-5">S{i + 1}</span>
+                        <span className="w-5" style={{ color: 'var(--text-faint)' }}>S{i + 1}</span>
                         <span className="text-emerald-400 font-medium">{Number(set.weight).toFixed(1)}kg</span>
-                        <span className="text-gray-500">× {set.reps}</span>
-                        {set.notes && <span className="text-gray-600 italic">— {set.notes}</span>}
+                        <span style={{ color: 'var(--text-dim)' }}>× {set.reps}</span>
+                        {set.notes && <span className="text-xs italic" style={{ color: 'var(--text-faint)' }}>— {set.notes}</span>}
                       </div>
                     ))}
                   </div>
@@ -265,7 +321,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {todayLogs.length === 0 && (
+      {activityEntries.length === 0 && (
         <EmptyState
           icon="💪"
           title="No activity today"
@@ -277,7 +333,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-300">📈 Progress</h2>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>📈 Per-Exercise Progress</h2>
             <select
               value={selectedExercise || ''}
               onChange={(e) => setSelectedExercise(parseInt(e.target.value))}
@@ -292,10 +348,10 @@ export default function Dashboard() {
         </div>
 
         <div className="card space-y-3">
-          <h2 className="text-sm font-semibold text-gray-300">🎯 Active Goals</h2>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>🎯 Active Goals</h2>
           {goals.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-gray-500 text-xs mb-2">No active goals</p>
+              <p className="text-xs mb-2" style={{ color: 'var(--text-dim)' }}>No active goals</p>
               <Link to="/goals" className="text-xs text-emerald-400 hover:text-emerald-300">Set a goal →</Link>
             </div>
           ) : (
@@ -306,10 +362,10 @@ export default function Dashboard() {
               return (
                 <div key={goal.id}>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-300 truncate">{goal.exercise_name}</span>
-                    <span className="text-gray-500">{goal.current_weight || 0}/{goal.target_weight}kg</span>
+                    <span className="truncate" style={{ color: 'var(--text-secondary)' }}>{goal.exercise_name}</span>
+                    <span style={{ color: 'var(--text-dim)' }}>{goal.current_weight || 0}/{goal.target_weight}kg</span>
                   </div>
-                  <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-card-hover)' }}>
                     <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
@@ -317,6 +373,12 @@ export default function Dashboard() {
             })
           )}
         </div>
+      </div>
+
+      {/* Accumulated Progress Chart */}
+      <div className="card">
+        <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-secondary)' }}>📊 Weekly Volume (90 days)</h2>
+        <AccumulatedProgressChart />
       </div>
     </div>
   );

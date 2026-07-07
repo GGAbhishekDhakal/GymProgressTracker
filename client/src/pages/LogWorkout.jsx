@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import LogForm from '../components/LogForm';
 import ExerciseCard from '../components/ExerciseCard';
@@ -16,16 +16,20 @@ const muscleColors = {
 };
 
 const DRAFT_KEY = 'logFormDraft';
+const SUMMARY_KEY = 'lastWorkoutSummary';
 
 function hasDraft() {
   try { return !!localStorage.getItem(DRAFT_KEY); } catch { return false; }
 }
-
 function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch {}
 }
+function saveSummary(data) {
+  try { localStorage.setItem(SUMMARY_KEY, JSON.stringify(data)); } catch {}
+}
 
 export default function LogWorkout() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [exercises, setExercises] = useState([]);
   const [routines, setRoutines] = useState([]);
@@ -33,14 +37,19 @@ export default function LogWorkout() {
   const [selectedRoutine, setSelectedRoutine] = useState(null);
   const [routineExercises, setRoutineExercises] = useState([]);
   const [completedExIds, setCompletedExIds] = useState([]);
+  const [skippedExIds, setSkippedExIds] = useState([]);
   const [loggingExId, setLoggingExId] = useState(null);
+  const [startedAt, setStartedAt] = useState(null);
   const [selectedExercises, setSelectedExercises] = useState([]);
   const [muscleFilter, setMuscleFilter] = useState('');
   const [search, setSearch] = useState('');
   const [logKey, setLogKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
-  const [hasDraftFlag, setHasDraftFlag] = useState(hasDraft());
+  const [showFinishConfirm, setShowFinishConfirm] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryData, setSummaryData] = useState(null);
+  const finishCalled = useRef(false);
 
   useEffect(() => {
     setShowDraftBanner(hasDraft());
@@ -57,27 +66,33 @@ export default function LogWorkout() {
       if (routineParam && rtData.length > 0) {
         const rt = rtData.find(r => r.id === parseInt(routineParam));
         if (rt) {
+          startRoutineInternal(rt);
           setMode('routine');
-          setSelectedRoutine(rt.id);
-          const exs = exData.filter(e => rt.exercise_ids?.includes(e.id));
-          setRoutineExercises(exs);
         }
       }
     }).finally(() => setLoading(false));
   }, []);
 
+  function startRoutineInternal(rt) {
+    setSelectedRoutine(rt.id);
+    setCompletedExIds([]);
+    setSkippedExIds([]);
+    setLoggingExId(null);
+    setStartedAt(new Date());
+    setShowSummary(false);
+    setShowFinishConfirm(false);
+    finishCalled.current = false;
+    const exs = exercises.filter(e => rt.exercise_ids?.includes(e.id));
+    setRoutineExercises(exs);
+  }
+
   function startRoutine(id) {
     const idNum = parseInt(id);
     if (!idNum) return;
+    const rt = routines.find(r => r.id === idNum);
+    if (!rt) return;
     setMode('routine');
-    setSelectedRoutine(idNum);
-    setCompletedExIds([]);
-    setLoggingExId(null);
-    const routine = routines.find(r => r.id === idNum);
-    if (routine) {
-      const exs = exercises.filter(e => routine.exercise_ids.includes(e.id));
-      setRoutineExercises(exs);
-    }
+    startRoutineInternal(rt);
   }
 
   function startManual() {
@@ -99,26 +114,81 @@ export default function LogWorkout() {
     setLogKey(k => k + 1);
   }
 
+  function handleSkip(exId) {
+    setSkippedExIds(prev => [...new Set([...prev, exId])]);
+  }
+
+  function handleUnskip(exId) {
+    setSkippedExIds(prev => prev.filter(id => id !== exId));
+  }
+
   function exitToMenu() {
     setMode(null);
     setSelectedRoutine(null);
     setRoutineExercises([]);
     setCompletedExIds([]);
+    setSkippedExIds([]);
     setLoggingExId(null);
+    setStartedAt(null);
+    setShowSummary(false);
+    setShowFinishConfirm(false);
+    finishCalled.current = false;
   }
 
   function resumeDraft() {
     setShowDraftBanner(false);
-    const hasEx = hasDraft();
-    if (hasEx) {
-      setMode('manual');
-    }
+    if (hasDraft()) setMode('manual');
   }
 
   function discardDraft() {
     clearDraft();
     setShowDraftBanner(false);
-    setHasDraftFlag(false);
+  }
+
+  function handleFinishClick() {
+    const incomplete = routineExercises.filter(
+      ex => !completedExIds.includes(ex.id) && !skippedExIds.includes(ex.id)
+    );
+    if (incomplete.length > 0) {
+      setShowFinishConfirm(true);
+    } else {
+      finishWorkout();
+    }
+  }
+
+  function finishWorkout() {
+    if (finishCalled.current) return;
+    finishCalled.current = true;
+
+    const now = new Date();
+    const durationMs = startedAt ? now - startedAt : 0;
+    const minutes = Math.floor(durationMs / 60000);
+    const durationStr = minutes >= 60
+      ? `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+      : `${minutes}m`;
+
+    const completeExs = routineExercises.filter(ex => completedExIds.includes(ex.id));
+    const skipExs = routineExercises.filter(ex => skippedExIds.includes(ex.id));
+    const allSkippedExIds = [...new Set([
+      ...skippedExIds,
+      ...routineExercises.filter(ex => !completedExIds.includes(ex.id) && !skippedExIds.includes(ex.id)).map(ex => ex.id)
+    ])];
+    setSkippedExIds(allSkippedExIds);
+
+    const data = {
+      routineName: routines.find(r => r.id === selectedRoutine)?.name || 'Workout',
+      setsLogged: completedExIds.length,
+      exercisesDone: completeExs.length,
+      exercisesSkipped: allSkippedExIds.length,
+      totalExercises: routineExercises.length,
+      duration: durationStr,
+      completedAt: now.toISOString(),
+    };
+
+    setSummaryData(data);
+    saveSummary(data);
+    setShowFinishConfirm(false);
+    setShowSummary(true);
   }
 
   const filteredExercises = exercises.filter(ex => {
@@ -133,11 +203,82 @@ export default function LogWorkout() {
 
   if (loading) return <LoadingSpinner />;
 
-  const routineDone = mode === 'routine' && routineExercises.length > 0 && completedExIds.length >= routineExercises.length;
+  const routineDone = mode === 'routine' && showSummary === false
+    && routineExercises.length > 0
+    && routineExercises.every(ex => completedExIds.includes(ex.id) || skippedExIds.includes(ex.id))
+    && completedExIds.length > 0
+    && !showFinishConfirm;
   const todayFormatted = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+  const numLogged = completedExIds.length + skippedExIds.length;
+  const totalRoutineExs = routineExercises.length;
 
   return (
     <div className="space-y-6">
+      {/* Finish confirmation modal */}
+      {showFinishConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--overlay)' }}>
+          <div className="card max-w-md w-full space-y-4 animate-[fadeInUp_0.2s_ease-out]">
+            <h3 className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>Finish Workout?</h3>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              You still have incomplete exercises:
+            </p>
+            <ul className="space-y-1">
+              {routineExercises
+                .filter(ex => !completedExIds.includes(ex.id) && !skippedExIds.includes(ex.id))
+                .map(ex => (
+                  <li key={ex.id} className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                    <span>{muscleColors[ex.muscle_group]?.emoji || '•'}</span>
+                    {ex.name}
+                  </li>
+                ))}
+            </ul>
+            <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
+              Unfinished exercises will be marked as skipped.
+            </p>
+            <div className="flex gap-2 justify-end pt-2">
+              <button onClick={() => setShowFinishConfirm(false)} className="btn-secondary text-sm">Go Back</button>
+              <button onClick={finishWorkout} className="btn-primary text-sm">Finish Anyway</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary overlay */}
+      {showSummary && summaryData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--overlay)' }}>
+          <div className="card max-w-sm w-full text-center space-y-5 animate-[fadeInUp_0.3s_ease-out]">
+            <div className="text-5xl">🎉</div>
+            <div>
+              <h2 className="text-xl font-bold" style={{ color: 'var(--text-secondary)' }}>Workout Complete!</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>{summaryData.routineName}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="stat-card !py-3">
+                <div className="stat-value text-lg">{summaryData.setsLogged}</div>
+                <div className="stat-label text-[10px]">Sets</div>
+              </div>
+              <div className="stat-card !py-3">
+                <div className="stat-value text-lg">{summaryData.exercisesDone}</div>
+                <div className="stat-label text-[10px]">Exercises</div>
+              </div>
+              <div className="stat-card !py-3">
+                <div className="stat-value text-lg" style={{ color: summaryData.exercisesSkipped > 0 ? '#f59e0b' : undefined }}>{summaryData.exercisesSkipped}</div>
+                <div className="stat-label text-[10px]">Skipped</div>
+              </div>
+              <div className="stat-card !py-3">
+                <div className="stat-value text-lg">{summaryData.duration}</div>
+                <div className="stat-label text-[10px]">Duration</div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={exitToMenu} className="btn-primary flex-1 text-sm">View Dashboard</button>
+              <button onClick={() => { exitToMenu(); navigate('/'); }} className="btn-secondary flex-1 text-sm">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">💪 Log Workout</h1>
@@ -218,7 +359,7 @@ export default function LogWorkout() {
         </div>
       )}
 
-      {mode === 'routine' && !routineDone && loggingExId && (
+      {mode === 'routine' && !showSummary && loggingExId && (
         <div className="card" style={{ borderColor: 'rgba(16,185,129,0.3)' }}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>
@@ -235,53 +376,71 @@ export default function LogWorkout() {
         </div>
       )}
 
-      {mode === 'routine' && !routineDone && !loggingExId && (
+      {mode === 'routine' && !showSummary && !loggingExId && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold" style={{ color: 'var(--text-secondary)' }}>
               {routines.find(r => r.id === selectedRoutine)?.name || 'Routine'}
             </h2>
             <span className="text-sm" style={{ color: 'var(--text-dim)' }}>
-              {completedExIds.length}/{routineExercises.length} logged
+              {completedExIds.length}/{totalRoutineExs} logged{skippedExIds.length > 0 ? ` · ${skippedExIds.length} skipped` : ''}
             </span>
           </div>
           {routineExercises.length > 0 && (
             <div className="space-y-2">
-              {routineExercises.map((ex, i) => {
+              {routineExercises.map((ex) => {
                 const isDone = completedExIds.includes(ex.id);
+                const isSkipped = skippedExIds.includes(ex.id);
+                const isPending = !isDone && !isSkipped;
                 const mc = muscleColors[ex.muscle_group];
                 return (
                   <div
                     key={ex.id}
                     className={`card !p-3 flex items-center justify-between transition-all duration-200 ${
-                      isDone ? 'opacity-60' : ''
+                      isDone || isSkipped ? 'opacity-60' : ''
                     }`}
-                    style={isDone ? { borderColor: 'rgba(16,185,129,0.3)' } : {}}
+                    style={isDone ? { borderColor: 'rgba(16,185,129,0.3)' } : isSkipped ? { borderColor: 'rgba(234,179,8,0.3)' } : {}}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className={`w-8 h-8 rounded-lg ${mc?.bg || 'bg-gray-800'} flex items-center justify-center text-sm shrink-0`}>
-                        {isDone ? '✅' : (mc?.emoji || '💪')}
+                        {isDone ? '✅' : isSkipped ? '⏭' : (mc?.emoji || '💪')}
                       </div>
                       <div className="min-w-0">
-                        <div className={`font-medium text-sm truncate ${isDone ? '' : ''}`} style={{ color: isDone ? 'var(--text-dim)' : 'var(--text-secondary)' }}>
+                        <div className={`font-medium text-sm truncate`} style={{ color: isDone || isSkipped ? 'var(--text-dim)' : 'var(--text-secondary)' }}>
                           {ex.name}
                         </div>
                         <div className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{ex.muscle_group} · {ex.category}</div>
                       </div>
                     </div>
-                    {isDone ? (
-                      <span className="text-xs shrink-0" style={{ color: 'var(--text-dim)' }}>Logged ✓</span>
-                    ) : (
-                      <button
-                        onClick={() => setLoggingExId(ex.id)}
-                        className="btn-primary text-[10px] !px-3 !py-1.5 shrink-0 flex items-center gap-1 animate-glow"
-                      >
-                        <span>💪</span> Log
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isDone ? (
+                        <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Logged ✓</span>
+                      ) : isSkipped ? (
+                        <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Skipped</span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setLoggingExId(ex.id)}
+                            className="btn-primary text-[10px] !px-3 !py-1.5 flex items-center gap-1 animate-glow"
+                          >
+                            <span>💪</span> Log
+                          </button>
+                          <button
+                            onClick={() => handleSkip(ex.id)}
+                            className="text-[10px] px-2 py-1.5 rounded-lg transition-colors"
+                            style={{ color: 'var(--text-dim)', backgroundColor: 'var(--bg-card-hover)' }}
+                            title="Skip this exercise"
+                          >
+                            ⏭
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}
+
+              {/* Add extra exercise */}
               <button
                 onClick={startManual}
                 className="card !p-3 w-full text-sm flex items-center justify-center gap-1 hover:border-emerald-700 transition-colors"
@@ -289,19 +448,29 @@ export default function LogWorkout() {
               >
                 <span>+</span> Add extra exercise
               </button>
+
+              {/* Finish button */}
+              {numLogged > 0 && (
+                <button
+                  onClick={handleFinishClick}
+                  className="btn-primary w-full text-sm py-3"
+                >
+                  🎯 Finish Workout
+                </button>
+              )}
             </div>
           )}
         </div>
       )}
 
+      {/* Auto-complete fallback (when all done without finish) */}
       {routineDone && (
         <div className="card text-center py-8 space-y-3 animate-[fadeInUp_0.4s_ease-out]">
           <div className="text-4xl">🎉</div>
-          <p className="text-emerald-400 font-semibold text-lg">Workout complete!</p>
-          <p className="text-sm" style={{ color: 'var(--text-dim)' }}>{routineExercises.length} exercises logged</p>
+          <p className="text-emerald-400 font-semibold text-lg">All exercises complete!</p>
           <div className="flex gap-2 justify-center">
-            <button onClick={exitToMenu} className="btn-primary text-sm">Done</button>
-            <button onClick={() => { setCompletedExIds([]); setLoggingExId(null); }} className="btn-secondary text-sm">Log again</button>
+            <button onClick={handleFinishClick} className="btn-primary text-sm">Finish Workout</button>
+            <button onClick={exitToMenu} className="btn-secondary text-sm">Back to menu</button>
           </div>
         </div>
       )}
@@ -329,7 +498,6 @@ export default function LogWorkout() {
                 key={logKey}
                 exercises={exercises.filter(e => selectedExercises.includes(e.id))}
                 onLogged={() => setLogKey(k => k + 1)}
-                onDraftChange={setHasDraftFlag}
               />
             </div>
           )}
