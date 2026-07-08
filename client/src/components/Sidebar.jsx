@@ -1,17 +1,22 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
-
-const links = [
-  { to: '/', label: 'Dashboard', icon: '📊' },
-  { to: '/log', label: 'Log', icon: '💪' },
-  { to: '/exercises', label: 'Exercises', icon: '🏋️' },
-  { to: '/routines', label: 'Routines', icon: '📋' },
-  { to: '/goals', label: 'Goals', icon: '🎯' },
-  { to: '/history', label: 'History', icon: '📜' },
-];
+import { useAuth } from '../context/AuthContext';
 
 export default function Sidebar() {
   const { sidebarCollapsed: collapsed, setSidebarCollapsed: setCollapsed, theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
+  const isAuthed = !!user;
+  const canAdmin = user && (user.role === 'superadmin' || user.role === 'admin');
+
+  const links = [
+    { to: '/', label: 'Dashboard', icon: '📊' },
+    { to: '/log', label: 'Log', icon: '💪' },
+    { to: '/exercises', label: 'Exercises', icon: '🏋️' },
+    { to: '/routines', label: 'Routines', icon: '📋' },
+    { to: '/goals', label: 'Goals', icon: '🎯' },
+    { to: '/history', label: 'History', icon: '📜' },
+    ...(canAdmin ? [{ to: '/admin', label: 'Admin', icon: '⚙️' }] : []),
+  ];
 
   function navClass({ isActive }) {
     const base = 'flex items-center gap-3 rounded-lg transition-all duration-200 ';
@@ -48,16 +53,43 @@ export default function Sidebar() {
         )}
       </div>
 
-      <nav className="flex-1 flex flex-col gap-0.5 py-2 overflow-y-auto">
-        {links.map(({ to, label, icon }) => (
-          <NavLink key={to} to={to} end={to === '/'} className={navClass}>
-            <span className="text-lg shrink-0">{icon}</span>
-            {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
-          </NavLink>
-        ))}
-      </nav>
+      {isAuthed && (
+        <nav className="flex-1 flex flex-col gap-0.5 py-2 overflow-y-auto">
+          {links.map(({ to, label, icon }) => (
+            <NavLink key={to} to={to} end={to === '/'} className={navClass}>
+              <span className="text-lg shrink-0">{icon}</span>
+              {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
+            </NavLink>
+          ))}
+        </nav>
+      )}
 
-      <div className="shrink-0 border-t py-3" style={{ borderColor: 'var(--border)' }}>
+      {isAuthed && !collapsed && (
+        <div className="shrink-0 border-t px-3 py-2" style={{ borderColor: 'var(--border)' }}>
+          <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{user.username}</div>
+          <div className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{user.role}</div>
+        </div>
+      )}
+
+      <div className="shrink-0 border-t py-2" style={{ borderColor: 'var(--border)' }}>
+        {isAuthed ? (
+          <button
+            onClick={logout}
+            className={`flex items-center gap-3 rounded-lg transition-all duration-200 text-gray-400 hover:text-red-400 hover:bg-red-900/20 w-full ${collapsed ? 'justify-center px-0 py-2.5 mx-1' : 'px-3 py-2 mx-2'}`}
+            title="Logout"
+          >
+            <span className="text-lg shrink-0">🚪</span>
+            {!collapsed && <span className="text-sm font-medium truncate">Logout</span>}
+          </button>
+        ) : (
+          <NavLink
+            to="/login"
+            className={`flex items-center gap-3 rounded-lg transition-all duration-200 text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 w-full ${collapsed ? 'justify-center px-0 py-2.5 mx-1' : 'px-3 py-2 mx-2'}`}
+          >
+            <span className="text-lg shrink-0">🔑</span>
+            {!collapsed && <span className="text-sm font-medium truncate">Sign In</span>}
+          </NavLink>
+        )}
         <button
           onClick={toggleTheme}
           className={`flex items-center gap-3 rounded-lg transition-all duration-200 text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 w-full ${collapsed ? 'justify-center px-0 py-2.5 mx-1' : 'px-3 py-2 mx-2'}`}
