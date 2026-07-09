@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { supabase, supabaseAdmin } = require('../db');
+const { supabase } = require('../db');
 const { authenticate } = require('../middleware/auth');
 const router = Router();
 
@@ -24,7 +24,7 @@ router.post('/register', async (req, res) => {
 
   const email = usernameToEmail(username);
 
-  const { data: authUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+  const { data: authUser, error: createErr } = await supabase.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -41,7 +41,7 @@ router.post('/register', async (req, res) => {
     .from('profiles')
     .insert({ id: authUser.user.id, username, role: 'client', approved: false });
   if (profileErr) {
-    await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+    await supabase.auth.admin.deleteUser(authUser.user.id);
     throw profileErr;
   }
 
