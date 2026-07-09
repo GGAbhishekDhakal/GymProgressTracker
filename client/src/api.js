@@ -27,6 +27,7 @@ async function request(url, options = {}) {
 
 export const api = {
   request,
+  setToken,
 
   // Exercises
   getExercises: (params) => { const q = new URLSearchParams(params).toString(); return request(`/exercises${q ? `?${q}` : ''}`); },
