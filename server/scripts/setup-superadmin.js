@@ -8,44 +8,50 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+async function ensureProfile(userId, username) {
+  console.log('Creating profile...');
+  const { error } = await supabaseAdmin
+    .from('profiles')
+    .insert({ id: userId, username, role: 'superadmin', approved: true });
+  if (error) {
+    if (error.code === '23505') {
+      console.log('Profile already exists');
+    } else {
+      console.error('Error creating profile:', error);
+      process.exit(1);
+    }
+  }
+}
+
 async function setup() {
   const username = 'x-admin';
   const password = 'X-Admin-Password';
   const email = `${username}@gt.local`;
 
+  let userId;
+
   console.log('Creating superadmin auth user...');
   const { data: authUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { username },
+    email, password, email_confirm: true, user_metadata: { username },
   });
+
   if (createErr) {
-    if (createErr.message.includes('already exists')) {
+    if (createErr.message?.includes('already registered') || createErr.message?.includes('already exists') || createErr.code === 'email_exists') {
       console.log('Superadmin auth user already exists, fetching...');
       const { data: users } = await supabaseAdmin.auth.admin.listUsers();
       const existing = users.users.find(u => u.email === email);
       if (!existing) { console.error('Could not find existing user'); process.exit(1); }
-      return await assignExisting(authUser?.id || existing.id);
-    }
-    console.error('Error creating user:', createErr);
-    process.exit(1);
-  }
-
-  console.log('Creating profile...');
-  const { error: profileErr } = await supabaseAdmin
-    .from('profiles')
-    .insert({ id: authUser.user.id, username, role: 'superadmin', approved: true });
-  if (profileErr) {
-    if (profileErr.code === '23505') {
-      console.log('Profile already exists');
+      userId = existing.id;
     } else {
-      console.error('Error creating profile:', profileErr);
+      console.error('Error creating user:', createErr);
       process.exit(1);
     }
+  } else {
+    userId = authUser.user.id;
   }
 
-  await assignExisting(authUser.user.id);
+  await ensureProfile(userId, username);
+  await assignExisting(userId);
 }
 
 async function assignExisting(userId) {
