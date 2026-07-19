@@ -14,7 +14,6 @@ export default function Sidebar() {
   if (isSuperadmin) {
     links = [
       { to: '/', label: 'Dashboard', icon: '📊' },
-      { to: '/org', label: 'Reports', icon: '📈' },
       { to: '/exercises', label: 'Exercises', icon: '🏋️' },
       { to: '/clients', label: 'Clients', icon: '👥' },
       { to: '/history', label: 'History', icon: '📜' },
