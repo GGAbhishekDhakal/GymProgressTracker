@@ -1,3 +1,19 @@
+-- RLS policies for exercises (shared/global table — everyone reads, admins manage)
+ALTER TABLE public.exercises ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "authenticated_read_exercises" ON public.exercises
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY IF NOT EXISTS "superadmin_manage_exercises" ON public.exercises
+  FOR ALL USING (
+    auth.uid() IN (SELECT id FROM public.profiles WHERE role = 'superadmin')
+  );
+
+CREATE POLICY IF NOT EXISTS "admin_manage_exercises" ON public.exercises
+  FOR ALL USING (
+    auth.uid() IN (SELECT id FROM public.profiles WHERE role = 'admin')
+  );
+
 -- RLS policies for profiles table
 -- Allow users to read their own profile
 CREATE POLICY IF NOT EXISTS "read_own_profile" ON public.profiles
