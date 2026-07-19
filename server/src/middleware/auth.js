@@ -18,7 +18,7 @@ async function authenticate(req, res, next) {
   if (!profile) {
     return res.status(401).json({ error: 'Profile not found' });
   }
-  if (profile.role !== 'superadmin' && !profile.approved) {
+  if (!['superadmin', 'ghost'].includes(profile.role) && !profile.approved) {
     return res.status(403).json({ error: 'Account not yet approved by an admin' });
   }
   req.user = { ...profile, email: user.email };
@@ -36,15 +36,22 @@ function authorize(...roles) {
 }
 
 function canAccessUser(targetUserId) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
     if (req.user.role === 'superadmin') return next();
     if (req.user.role === 'admin') {
-      const eq = String(req.user.id) === String(targetUserId);
+      if (!targetUserId) return res.status(400).json({ error: 'No user specified' });
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('admin_id')
+        .eq('id', targetUserId)
+        .maybeSingle();
+      if (!profile) return res.status(404).json({ error: 'User not found' });
+      if (profile.admin_id !== req.user.id) return res.status(403).json({ error: 'Not your client' });
       return next();
     }
     if (String(req.user.id) === String(targetUserId)) return next();
-    return res.status(403).json({ error: 'Cannot access this user\'s data' });
+    return res.status(403).json({ error: 'Cannot access this users data' });
   };
 }
 

@@ -9,6 +9,8 @@ services:
       - key: NODE_ENV
         value: production
       - key: SUPABASE_URL
-        value: https://draxzpysmudkjpicsonq.supabase.co
+        sync: false
       - key: SUPABASE_ANON_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyYXh6cHlzbXVka2pwaWNzb25xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NjIwOTMsImV4cCI6MjA5ODQzODA5M30.TpJQcuQXhGXzf6BbTUKQ6FPWJXJCTHKdqmjaEJ70ZcA
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

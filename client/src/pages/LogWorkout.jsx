@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import LogForm from '../components/LogForm';
 import ExerciseCard from '../components/ExerciseCard';
@@ -29,6 +30,8 @@ function saveSummary(data) {
 }
 
 export default function LogWorkout() {
+  const { user } = useAuth();
+  const isClient = user && (user.role === 'client' || user.role === 'ghost');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [exercises, setExercises] = useState([]);
@@ -235,6 +238,20 @@ export default function LogWorkout() {
     .filter(g => g.items.length > 0);
 
   if (loading) return <LoadingSpinner />;
+
+  if (!isClient) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">💪 Log Workout</h1>
+        <div className="card text-center py-8">
+          <div className="text-4xl mb-3">🔒</div>
+          <p className="font-semibold" style={{ color: 'var(--text-secondary)' }}>Workout logging is for clients only</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>View client workout logs in the History page.</p>
+          <button onClick={() => navigate('/history')} className="btn-primary text-sm mt-4">Go to History</button>
+        </div>
+      </div>
+    );
+  }
 
   const routineDone = mode === 'routine' && showSummary === false
     && routineExercises.length > 0

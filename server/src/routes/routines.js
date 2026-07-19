@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { supabase } = require('../db');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 
 const router = Router();
 
@@ -8,9 +8,7 @@ router.use(authenticate);
 
 function userFilter(req) {
   if (req.user.role === 'superadmin') return {};
-  if (req.user.role === 'admin') {
-    return { or: `user_id.eq.${req.user.id},user_id.in.(select id from profiles where admin_id = ${req.user.id})` };
-  }
+  if (req.user.role === 'admin') return {};
   return { user_id: req.user.id };
 }
 
@@ -23,12 +21,28 @@ router.get('/', async (req, res) => {
   }
   const { data, error } = await query.order('name');
   if (error) throw error;
+
+  let assigned = [];
+  if (req.user.role === 'client') {
+    const { data: ar } = await supabase
+      .from('assigned_routines')
+      .select('routine_id, routines(*, routine_exercises(exercise_id, order_index))')
+      .eq('client_id', req.user.id);
+    assigned = (ar || []).map(a => ({
+      ...a.routines,
+      assigned: true,
+      exercise_ids: (a.routines?.routine_exercises || []).sort((a, b) => a.order_index - b.order_index).map(re => re.exercise_id),
+      routine_exercises: undefined,
+    }));
+  }
+
   const result = data.map(r => ({
     ...r,
     exercise_ids: (r.routine_exercises || []).sort((a, b) => a.order_index - b.order_index).map(re => re.exercise_id),
     routine_exercises: undefined,
   }));
-  res.json(result);
+
+  res.json([...result, ...assigned]);
 });
 
 router.get('/:id', async (req, res) => {
@@ -54,15 +68,26 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   const { name, description, day_of_week, exercise_ids } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required' });
+
+  const ownerType = ['client', 'ghost'].includes(req.user.role) ? 'personal' : 'admin_created';
+
   const { data: routine, error } = await supabase.from('routines')
-    .insert({ name, description: description || null, day_of_week: day_of_week || null, user_id: req.user.id })
+    .insert({
+      name,
+      description: description || null,
+      day_of_week: day_of_week || null,
+      user_id: ['client', 'ghost'].includes(req.user.role) ? req.user.id : null,
+      owner_type: ownerType,
+    })
     .select().single();
   if (error) throw error;
+
   if (exercise_ids && exercise_ids.length) {
     const routineExercises = exercise_ids.map((id, index) => ({ routine_id: routine.id, exercise_id: id, order_index: index }));
     const { error: reErr } = await supabase.from('routine_exercises').insert(routineExercises);
     if (reErr) throw reErr;
   }
+
   res.status(201).json(routine);
 });
 
@@ -71,22 +96,37 @@ router.put('/:id', async (req, res) => {
   const { data: existing, error: checkErr } = await supabase.from('routines').select('*').eq('id', req.params.id).maybeSingle();
   if (checkErr) throw checkErr;
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  if (existing.user_id !== req.user.id && req.user.role === 'client') return res.status(403).json({ error: 'Not your routine' });
+
+  if (['client', 'ghost'].includes(req.user.role) && existing.user_id !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot edit assigned routine' });
+  }
+
+  if (req.user.role === 'admin' && existing.owner_type !== 'admin_created') {
+    return res.status(403).json({ error: 'Cannot edit client personal routines' });
+  }
+
   const updates = {};
   if (name !== undefined) updates.name = name;
   if (description !== undefined) updates.description = description;
   if (day_of_week !== undefined) updates.day_of_week = day_of_week || null;
+
   if (Object.keys(updates).length > 0) {
     const { error: updErr } = await supabase.from('routines').update(updates).eq('id', req.params.id);
     if (updErr) throw updErr;
   }
+
   if (exercise_ids) {
     const { error: delErr } = await supabase.from('routine_exercises').delete().eq('routine_id', req.params.id);
     if (delErr) throw delErr;
-    const routineExercises = exercise_ids.map((id, index) => ({ routine_id: parseInt(req.params.id), exercise_id: id, order_index: index }));
+    const routineExercises = exercise_ids.map((id, index) => ({
+      routine_id: parseInt(req.params.id),
+      exercise_id: id,
+      order_index: index,
+    }));
     const { error: insErr } = await supabase.from('routine_exercises').insert(routineExercises);
     if (insErr) throw insErr;
   }
+
   const { data: routine, error } = await supabase.from('routines').select('*').eq('id', req.params.id).single();
   if (error) throw error;
   res.json(routine);
@@ -96,7 +136,15 @@ router.delete('/:id', async (req, res) => {
   const { data: existing, error: checkErr } = await supabase.from('routines').select('*').eq('id', req.params.id).maybeSingle();
   if (checkErr) throw checkErr;
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  if (existing.user_id !== req.user.id && req.user.role !== 'superadmin') return res.status(403).json({ error: 'Not your routine' });
+
+  if (['client', 'ghost'].includes(req.user.role) && existing.user_id !== req.user.id) {
+    return res.status(403).json({ error: 'Cannot delete assigned routine' });
+  }
+
+  if (req.user.role === 'admin' && existing.owner_type !== 'admin_created') {
+    return res.status(403).json({ error: 'Cannot delete client personal routines' });
+  }
+
   const { data, error } = await supabase.from('routines').delete().eq('id', req.params.id).select();
   if (error) throw error;
   res.json({ message: 'Deleted' });

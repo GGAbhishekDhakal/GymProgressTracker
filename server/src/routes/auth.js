@@ -11,7 +11,7 @@ function usernameToEmail(username) {
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, ghost } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
   }
@@ -37,16 +37,22 @@ router.post('/register', async (req, res) => {
     throw createErr;
   }
 
+  const isGhost = ghost === true || ghost === 'true';
+  const role = isGhost ? 'ghost' : 'client';
+  const approved = isGhost;
+
   const { error: profileErr } = await supabase
     .from('profiles')
-    .insert({ id: authUser.user.id, username, role: 'client', approved: false });
+    .insert({ id: authUser.user.id, username, role, approved });
   if (profileErr) {
     await supabase.auth.admin.deleteUser(authUser.user.id);
     throw profileErr;
   }
 
   res.status(201).json({
-    message: 'Account created! An admin must approve your account before you can log in.',
+    message: isGhost
+      ? 'Solo account created! You can log in immediately.'
+      : 'Account created! An admin must approve your account before you can log in.',
   });
 });
 
@@ -74,7 +80,7 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Profile not found' });
   }
 
-  if (profile.role !== 'superadmin' && !profile.approved) {
+  if (!['superadmin', 'ghost'].includes(profile.role) && !profile.approved) {
     return res.status(403).json({
       error: 'Your account is pending admin approval',
       pending: true,
@@ -94,7 +100,7 @@ router.get('/me', authenticate, async (req, res) => {
 
 // POST /api/auth/google-setup
 router.post('/google-setup', async (req, res) => {
-  const { username } = req.body;
+  const { username, ghost } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No token' });
   if (!username) return res.status(400).json({ error: 'Username is required' });
@@ -109,14 +115,18 @@ router.post('/google-setup', async (req, res) => {
     .maybeSingle();
   if (existing) return res.status(409).json({ error: 'Username already taken' });
 
+  const isGhost = ghost === true || ghost === 'true';
+  const role = isGhost ? 'ghost' : 'client';
+  const approved = isGhost;
+
   const { data: profile, error: profileErr } = await supabase
     .from('profiles')
-    .insert({ id: user.id, username, role: 'client', approved: false })
+    .insert({ id: user.id, username, role, approved })
     .select()
     .single();
   if (profileErr) throw profileErr;
 
-  res.status(201).json({ user: profile, message: 'Account created! Awaiting admin approval.' });
+  res.status(201).json({ user: profile, message: isGhost ? 'Solo account created!' : 'Account created! Awaiting admin approval.' });
 });
 
 module.exports = router;

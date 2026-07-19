@@ -57,12 +57,16 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const register = useCallback(async (username, password) => {
-    return api.request('/auth/register', {
+  const register = useCallback(async (username, password, ghost) => {
+    const data = await api.request('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, ghost: !!ghost }),
     });
-  }, []);
+    if (ghost) {
+      return login(username, password);
+    }
+    return data;
+  }, [login]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('authSession');

@@ -13,26 +13,29 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import AuthCallback from './pages/AuthCallback';
 import Admin from './pages/Admin';
+import AdminAssign from './pages/AdminAssign';
+import OrgDashboard from './pages/OrgDashboard';
 
 export default function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <Layout>
-            <Routes>
+          <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="/log" element={<ProtectedRoute><LogWorkout /></ProtectedRoute>} />
-              <Route path="/exercises" element={<ProtectedRoute><Exercises /></ProtectedRoute>} />
-              <Route path="/routines" element={<ProtectedRoute><Routines /></ProtectedRoute>} />
-              <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
-              <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-              <Route path="/admin" element={<ProtectedRoute roles={['superadmin', 'admin']}><Admin /></ProtectedRoute>} />
+              <Route path="/" element={<Layout><ProtectedRoute><Dashboard /></ProtectedRoute></Layout>} />
+              <Route path="/log" element={<Layout><ProtectedRoute roles={['client', 'ghost']}><LogWorkout /></ProtectedRoute></Layout>} />
+              <Route path="/exercises" element={<Layout><ProtectedRoute><Exercises /></ProtectedRoute></Layout>} />
+              <Route path="/routines" element={<Layout><ProtectedRoute roles={['client', 'admin', 'ghost']}><Routines /></ProtectedRoute></Layout>} />
+              <Route path="/goals" element={<Layout><ProtectedRoute roles={['client', 'ghost']}><Goals /></ProtectedRoute></Layout>} />
+              <Route path="/history" element={<Layout><ProtectedRoute><History /></ProtectedRoute></Layout>} />
+              <Route path="/admin" element={<Layout><ProtectedRoute roles={['superadmin', 'admin']}><Admin /></ProtectedRoute></Layout>} />
+              <Route path="/assign" element={<Layout><ProtectedRoute roles={['superadmin', 'admin']}><AdminAssign /></ProtectedRoute></Layout>} />
+              <Route path="/org" element={<Layout><ProtectedRoute roles={['superadmin']}><OrgDashboard /></ProtectedRoute></Layout>} />
+              <Route path="/clients" element={<Layout><ProtectedRoute roles={['superadmin']}><Admin /></ProtectedRoute></Layout>} />
             </Routes>
-          </Layout>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

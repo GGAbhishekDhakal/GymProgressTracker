@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import ExerciseCard from '../components/ExerciseCard';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -17,6 +18,9 @@ const muscleColors = {
 };
 
 export default function Exercises() {
+  const { user } = useAuth();
+  const canEdit = user && (user.role === 'superadmin' || user.role === 'admin');
+  const isClient = user && (user.role === 'client' || user.role === 'ghost');
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [muscleFilter, setMuscleFilter] = useState('');
@@ -98,9 +102,11 @@ export default function Exercises() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Exercise Library</h1>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">
-          {showForm ? 'Cancel' : '+ Add Exercise'}
-        </button>
+        {canEdit && (
+          <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">
+            {showForm ? 'Cancel' : '+ Add Exercise'}
+          </button>
+        )}
       </div>
 
       {showForm && (

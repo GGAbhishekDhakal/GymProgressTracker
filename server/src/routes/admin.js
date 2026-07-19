@@ -99,10 +99,51 @@ router.post('/users/create-client', async (req, res) => {
   res.status(201).json({ message: 'Client account created successfully' });
 });
 
+// POST /api/admin/users/create-admin — superadmin creates an admin account
+router.post('/users/create-admin', authorize('superadmin'), async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  const email = `${username}@${EMAIL_DOMAIN}`;
+
+  const { data: authUser, error: createErr } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { username },
+  });
+  if (createErr) {
+    if (createErr.message?.includes('already exists')) {
+      return res.status(409).json({ error: 'Username already taken' });
+    }
+    throw createErr;
+  }
+
+  const { error: profileErr } = await supabase
+    .from('profiles')
+    .insert({
+      id: authUser.user.id,
+      username,
+      role: 'admin',
+      approved: true,
+    });
+  if (profileErr) {
+    await supabase.auth.admin.deleteUser(authUser.user.id);
+    throw profileErr;
+  }
+
+  res.status(201).json({ message: 'Admin account created successfully' });
+});
+
 // PUT /api/admin/users/:id/role — superadmin only: change user role
 router.put('/users/:id/role', authorize('superadmin'), async (req, res) => {
   const { role } = req.body;
-  if (!['superadmin', 'admin', 'client'].includes(role)) {
+  if (!['superadmin', 'admin', 'client', 'ghost'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
   }
 

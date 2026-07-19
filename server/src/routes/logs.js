@@ -8,20 +8,27 @@ router.use(authenticate);
 
 function userFilter(req) {
   if (req.user.role === 'superadmin') return {};
-  if (req.user.role === 'admin') {
-    return { or: `user_id.eq.${req.user.id},user_id.in.(select id from profiles where admin_id = ${req.user.id})` };
-  }
+  if (req.user.role === 'admin') return {};
   return { user_id: req.user.id };
 }
 
 router.get('/', async (req, res) => {
-  const { exercise_id, from, to, limit, offset } = req.query;
-  const filter = userFilter(req);
-  let query = supabase.from('workout_logs').select('*, exercises(name, muscle_group, category)');
-  for (const [k, v] of Object.entries(filter)) {
-    if (k === 'or') query = query.or(v);
-    else query = query.eq(k, v);
+  const { exercise_id, from, to, limit, offset, user_id } = req.query;
+
+  if (user_id && !['superadmin', 'admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Cannot view other users logs' });
   }
+
+  let targetUserId = req.user.id;
+  if (user_id && (req.user.role === 'superadmin' || req.user.role === 'admin')) {
+    if (req.user.role === 'admin') {
+      const { data: profile } = await supabase.from('profiles').select('admin_id').eq('id', user_id).maybeSingle();
+      if (!profile || profile.admin_id !== req.user.id) return res.status(403).json({ error: 'Not your client' });
+    }
+    targetUserId = user_id;
+  }
+
+  let query = supabase.from('workout_logs').select('*, exercises(name, muscle_group, category)').eq('user_id', targetUserId);
   if (exercise_id) query = query.eq('exercise_id', exercise_id);
   if (from) query = query.gte('logged_at', from);
   if (to) query = query.lte('logged_at', to);
@@ -34,6 +41,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
+  if (!['client', 'ghost'].includes(req.user.role)) return res.status(403).json({ error: 'Only clients can log workouts' });
   const { exercise_id, weight, reps, sets, notes, logged_at } = req.body;
   if (!exercise_id || weight === undefined) return res.status(400).json({ error: 'exercise_id and weight are required' });
   const { data: exercise, error: checkErr } = await supabase.from('exercises').select('id').eq('id', exercise_id).maybeSingle();
@@ -43,8 +51,7 @@ router.post('/', async (req, res) => {
   const { data: log, error } = await supabase
     .from('workout_logs')
     .insert({ exercise_id, weight, reps: reps || 1, sets: sets || 1, notes: notes || null, logged_at: date, user_id: req.user.id })
-    .select('*, exercises(name, muscle_group)')
-    .single();
+    .select('*, exercises(name, muscle_group)').single();
   if (error) throw error;
   const result = { ...log, exercise_name: log.exercises?.name, muscle_group: log.exercises?.muscle_group, exercises: undefined };
   res.status(201).json(result);
@@ -55,7 +62,7 @@ router.put('/:id', async (req, res) => {
   const { data: existing, error: checkErr } = await supabase.from('workout_logs').select('*').eq('id', req.params.id).maybeSingle();
   if (checkErr) throw checkErr;
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  if (existing.user_id !== req.user.id && req.user.role === 'client') return res.status(403).json({ error: 'Not your log' });
+  if (existing.user_id !== req.user.id && !['superadmin', 'admin'].includes(req.user.role)) return res.status(403).json({ error: 'Not your log' });
   const updates = {};
   if (weight !== undefined) updates.weight = weight;
   if (reps !== undefined) updates.reps = reps;
@@ -71,6 +78,7 @@ router.put('/:id', async (req, res) => {
 });
 
 router.post('/batch', async (req, res) => {
+  if (!['client', 'ghost'].includes(req.user.role)) return res.status(403).json({ error: 'Only clients can log workouts' });
   const { entries } = req.body;
   if (!entries || !Array.isArray(entries) || entries.length === 0) return res.status(400).json({ error: 'entries array is required' });
   const date = entries[0].logged_at || new Date().toISOString().split('T')[0];

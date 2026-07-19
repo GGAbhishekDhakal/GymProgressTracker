@@ -52,6 +52,23 @@ export default function Admin() {
     }
   }
 
+  async function createAdmin(e) {
+    e.preventDefault();
+    setMessage('');
+    try {
+      await api.request('/admin/users/create-admin', {
+        method: 'POST',
+        body: JSON.stringify({ username: newUsername, password: newPassword }),
+      });
+      setMessage('Admin created!');
+      setNewUsername('');
+      setNewPassword('');
+      fetchUsers();
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
   async function changeRole(id, role) {
     try {
       await api.request(`/admin/users/${id}/role`, {
@@ -83,7 +100,7 @@ export default function Admin() {
         </div>
       )}
 
-      <div className="flex gap-2 border-b pb-2" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex gap-2 border-b pb-2 flex-wrap" style={{ borderColor: 'var(--border)' }}>
         <button onClick={() => setTab('users')} className={`text-sm px-3 py-1 rounded-t ${tab === 'users' ? 'font-semibold' : ''}`}
           style={tab === 'users' ? { color: 'var(--text-secondary)', borderBottom: '2px solid #34d399' } : { color: 'var(--text-dim)' }}>
           All Users ({users.length})
@@ -94,10 +111,20 @@ export default function Admin() {
             Pending ({pending.length})
           </button>
         )}
+        <button onClick={() => setTab('pending')} className={`text-sm px-3 py-1 rounded-t ${tab === 'pending' ? 'font-semibold' : ''}`}
+          style={tab === 'pending' ? { color: 'var(--text-secondary)', borderBottom: '2px solid #f59e0b' } : { color: 'var(--text-dim)' }}>
+          Pending {pending.length > 0 ? `(${pending.length})` : ''}
+        </button>
         <button onClick={() => setTab('create')} className={`text-sm px-3 py-1 rounded-t ${tab === 'create' ? 'font-semibold' : ''}`}
           style={tab === 'create' ? { color: 'var(--text-secondary)', borderBottom: '2px solid #34d399' } : { color: 'var(--text-dim)' }}>
           Create Client
         </button>
+        {isSuperadmin && (
+          <button onClick={() => setTab('create-admin')} className={`text-sm px-3 py-1 rounded-t ${tab === 'create-admin' ? 'font-semibold' : ''}`}
+            style={tab === 'create-admin' ? { color: 'var(--text-secondary)', borderBottom: '2px solid #a78bfa' } : { color: 'var(--text-dim)' }}>
+            Create Admin
+          </button>
+        )}
       </div>
 
       {tab === 'users' && (
@@ -106,7 +133,7 @@ export default function Admin() {
             <div key={u.id} className="card !p-3 flex items-center justify-between">
               <div>
                 <span className="font-medium text-sm">{u.username}</span>
-                <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${u.role === 'superadmin' ? 'bg-purple-900/40 text-purple-400' : u.role === 'admin' ? 'bg-blue-900/40 text-blue-400' : 'bg-gray-800 text-gray-400'}`}>
+                <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${u.role === 'superadmin' ? 'bg-purple-900/40 text-purple-400' : u.role === 'admin' ? 'bg-blue-900/40 text-blue-400' : u.role === 'ghost' ? 'bg-indigo-900/40 text-indigo-400' : 'bg-gray-800 text-gray-400'}`}>
                   {u.role}
                 </span>
                 {!u.approved && <span className="ml-1 text-xs text-yellow-400">(pending)</span>}
@@ -118,6 +145,7 @@ export default function Admin() {
                   className="w-auto text-xs !py-1"
                 >
                   <option value="client">Client</option>
+                  <option value="ghost">Ghost</option>
                   <option value="admin">Admin</option>
                 </select>
               )}
@@ -150,6 +178,7 @@ export default function Admin() {
 
       {tab === 'create' && (
         <form onSubmit={createClient} className="card !p-4 space-y-3 max-w-sm">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Create Client Account</h2>
           <div>
             <label className="text-xs font-medium" style={{ color: 'var(--text-dim)' }}>Username</label>
             <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)}
@@ -161,6 +190,23 @@ export default function Admin() {
               className="w-full !py-2 mt-1" required minLength={6} />
           </div>
           <button type="submit" className="btn-primary w-full !py-2">Create Client Account</button>
+        </form>
+      )}
+
+      {tab === 'create-admin' && isSuperadmin && (
+        <form onSubmit={createAdmin} className="card !p-4 space-y-3 max-w-sm">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Create Admin Account</h2>
+          <div>
+            <label className="text-xs font-medium" style={{ color: 'var(--text-dim)' }}>Username</label>
+            <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)}
+              className="w-full !py-2 mt-1" required minLength={3} />
+          </div>
+          <div>
+            <label className="text-xs font-medium" style={{ color: 'var(--text-dim)' }}>Password</label>
+            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+              className="w-full !py-2 mt-1" required minLength={6} />
+          </div>
+          <button type="submit" className="btn-primary w-full !py-2" style={{ backgroundColor: '#7c3aed' }}>Create Admin Account</button>
         </form>
       )}
     </div>

@@ -11,26 +11,26 @@ function epleyOneRM(weight, reps) {
   return Math.round(Number(weight) * (1 + reps / 30) * 10) / 10;
 }
 
-function userFilter(req) {
-  if (req.user.role === 'superadmin') return {};
-  if (req.user.role === 'admin') {
-    return { or: `user_id.eq.${req.user.id},user_id.in.(select id from profiles where admin_id = ${req.user.id})` };
-  }
-  return { user_id: req.user.id };
-}
-
 router.get('/:exerciseId', async (req, res) => {
   const { exerciseId } = req.params;
-  const { days } = req.query;
+  const { days, user_id } = req.query;
+
+  let targetUserId = req.user.id;
+  if (user_id && req.user.role === 'superadmin') {
+    targetUserId = user_id;
+  } else if (user_id && req.user.role === 'admin') {
+    const { data: profile } = await supabase.from('profiles').select('admin_id').eq('id', user_id).maybeSingle();
+    if (!profile || profile.admin_id !== req.user.id) return res.status(403).json({ error: 'Not your client' });
+    targetUserId = user_id;
+  } else if (user_id && !['superadmin', 'admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Cannot view other users progress' });
+  }
+
   const { data: exercise, error: exErr } = await supabase.from('exercises').select('*').eq('id', exerciseId).maybeSingle();
   if (exErr) throw exErr;
   if (!exercise) return res.status(404).json({ error: 'Exercise not found' });
-  const filter = userFilter(req);
-  let query = supabase.from('workout_logs').select('*').eq('exercise_id', exerciseId);
-  for (const [k, v] of Object.entries(filter)) {
-    if (k === 'or') query = query.or(v);
-    else query = query.eq(k, v);
-  }
+
+  let query = supabase.from('workout_logs').select('*').eq('exercise_id', exerciseId).eq('user_id', targetUserId);
   if (days) { const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - parseInt(days)); query = query.gte('logged_at', cutoff.toISOString().split('T')[0]); }
   const { data: logs, error } = await query.order('logged_at', { ascending: true }).order('created_at', { ascending: true });
   if (error) throw error;
@@ -39,13 +39,20 @@ router.get('/:exerciseId', async (req, res) => {
 });
 
 router.get('/', async (req, res) => {
-  const { days } = req.query;
-  const filter = userFilter(req);
-  let query = supabase.from('workout_logs').select('*, exercises(name, muscle_group)');
-  for (const [k, v] of Object.entries(filter)) {
-    if (k === 'or') query = query.or(v);
-    else query = query.eq(k, v);
+  const { days, user_id } = req.query;
+
+  let targetUserId = req.user.id;
+  if (user_id && req.user.role === 'superadmin') {
+    targetUserId = user_id;
+  } else if (user_id && req.user.role === 'admin') {
+    const { data: profile } = await supabase.from('profiles').select('admin_id').eq('id', user_id).maybeSingle();
+    if (!profile || profile.admin_id !== req.user.id) return res.status(403).json({ error: 'Not your client' });
+    targetUserId = user_id;
+  } else if (user_id && !['superadmin', 'admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Cannot view other users progress' });
   }
+
+  let query = supabase.from('workout_logs').select('*, exercises(name, muscle_group)').eq('user_id', targetUserId);
   if (days) { const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - parseInt(days)); query = query.gte('logged_at', cutoff.toISOString().split('T')[0]); }
   const { data: logs, error } = await query.order('logged_at', { ascending: true });
   if (error) throw error;

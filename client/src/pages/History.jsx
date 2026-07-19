@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -13,9 +15,15 @@ const muscleStyle = {
 };
 
 export default function History() {
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const canViewClients = user && (user.role === 'superadmin' || user.role === 'admin');
+  const isClient = user && (user.role === 'client' || user.role === 'ghost');
   const [logs, setLogs] = useState([]);
+  const [clients, setClients] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState(searchParams.get('user') || '');
   const [filterExercise, setFilterExercise] = useState('');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
@@ -26,6 +34,7 @@ export default function History() {
     if (filterExercise) params.exercise_id = filterExercise;
     if (filterFrom) params.from = filterFrom;
     if (filterTo) params.to = filterTo;
+    if (selectedUser && canViewClients) params.user_id = selectedUser;
     params.limit = '200';
 
     api.getLogs(params)
@@ -35,9 +44,17 @@ export default function History() {
 
   useEffect(() => {
     api.getExercises().then(setExercises);
+    if (canViewClients) {
+      api.request('/admin/users').then(data => {
+        const myClients = user.role === 'superadmin'
+          ? data.filter(p => p.role === 'client')
+          : data.filter(p => p.admin_id === user.id && p.role === 'client' && p.approved);
+        setClients(myClients);
+      }).catch(() => {});
+    }
   }, []);
 
-  useEffect(() => { loadLogs(); }, [filterExercise, filterFrom, filterTo]);
+  useEffect(() => { loadLogs(); }, [filterExercise, filterFrom, filterTo, selectedUser]);
 
   async function handleDelete(id) {
     if (!confirm('Delete this entry?')) return;
@@ -66,7 +83,18 @@ export default function History() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">📜 Workout History</h1>
 
-      <div className="card grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div className="card grid grid-cols-1 sm:grid-cols-5 gap-3">
+        {canViewClients && (
+          <div>
+            <label>User</label>
+            <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
+              <option value="">{user.role === 'superadmin' ? 'All users' : 'My clients'}</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.username}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label>Exercise</label>
           <select value={filterExercise} onChange={(e) => setFilterExercise(e.target.value)}>

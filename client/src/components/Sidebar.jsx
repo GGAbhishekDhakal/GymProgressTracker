@@ -6,17 +6,38 @@ export default function Sidebar() {
   const { sidebarCollapsed: collapsed, setSidebarCollapsed: setCollapsed, theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const isAuthed = !!user;
-  const canAdmin = user && (user.role === 'superadmin' || user.role === 'admin');
+  const isSuperadmin = user?.role === 'superadmin';
+  const isAdmin = user?.role === 'admin';
+  const isClient = user?.role === 'client' || user?.role === 'ghost';
 
-  const links = [
-    { to: '/', label: 'Dashboard', icon: '📊' },
-    { to: '/log', label: 'Log', icon: '💪' },
-    { to: '/exercises', label: 'Exercises', icon: '🏋️' },
-    { to: '/routines', label: 'Routines', icon: '📋' },
-    { to: '/goals', label: 'Goals', icon: '🎯' },
-    { to: '/history', label: 'History', icon: '📜' },
-    ...(canAdmin ? [{ to: '/admin', label: 'Admin', icon: '⚙️' }] : []),
-  ];
+  let links = [];
+  if (isSuperadmin) {
+    links = [
+      { to: '/', label: 'Dashboard', icon: '📊' },
+      { to: '/org', label: 'Reports', icon: '📈' },
+      { to: '/exercises', label: 'Exercises', icon: '🏋️' },
+      { to: '/clients', label: 'Clients', icon: '👥' },
+      { to: '/history', label: 'History', icon: '📜' },
+    ];
+  } else if (isAdmin) {
+    links = [
+      { to: '/', label: 'Dashboard', icon: '📊' },
+      { to: '/exercises', label: 'Exercises', icon: '🏋️' },
+      { to: '/routines', label: 'Routines', icon: '📋' },
+      { to: '/assign', label: 'Assign', icon: '🔗' },
+      { to: '/admin', label: 'Clients', icon: '👥' },
+      { to: '/history', label: 'History', icon: '📜' },
+    ];
+  } else if (isClient) {
+    links = [
+      { to: '/', label: 'Dashboard', icon: '📊' },
+      { to: '/log', label: 'Log', icon: '💪' },
+      { to: '/exercises', label: 'Exercises', icon: '🏋️' },
+      { to: '/routines', label: 'Routines', icon: '📋' },
+      { to: '/goals', label: 'Goals', icon: '🎯' },
+      { to: '/history', label: 'History', icon: '📜' },
+    ];
+  }
 
   function navClass({ isActive }) {
     const base = 'flex items-center gap-3 rounded-lg transition-all duration-200 ';
@@ -67,7 +88,7 @@ export default function Sidebar() {
       {isAuthed && !collapsed && (
         <div className="shrink-0 border-t px-3 py-2" style={{ borderColor: 'var(--border)' }}>
           <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{user.username}</div>
-          <div className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{user.role}</div>
+          <div className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{user.role === 'ghost' ? 'ghost' : user.role}</div>
         </div>
       )}
 

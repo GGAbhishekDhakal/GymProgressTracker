@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import GoalCard from '../components/GoalCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
 export default function Goals() {
+  const { user } = useAuth();
+  const canViewClients = user && (user.role === 'superadmin' || user.role === 'admin');
+  const isClient = user && (user.role === 'client' || user.role === 'ghost');
   const [goals, setGoals] = useState([]);
+  const [clients, setClients] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [exerciseId, setExerciseId] = useState('');
   const [targetWeight, setTargetWeight] = useState('');
@@ -16,14 +22,32 @@ export default function Goals() {
   const [statusFilter, setStatusFilter] = useState('active');
 
   function loadGoals() {
-    api.getGoals().then(setGoals).finally(() => setLoading(false));
+    const params = {};
+    if (selectedUser && canViewClients) params.user_id = selectedUser;
+    api.getGoals(params).then(setGoals).finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    Promise.all([api.getGoals(), api.getExercises()])
-      .then(([g, e]) => { setGoals(g); setExercises(e); })
+    const promises = [api.getExercises()];
+    if (canViewClients) {
+      promises.push(
+        api.request('/admin/users').then(data => {
+          const myClients = user.role === 'superadmin'
+            ? data.filter(p => p.role === 'client')
+            : data.filter(p => p.admin_id === user.id && p.role === 'client' && p.approved);
+          setClients(myClients);
+        }).catch(() => {})
+      );
+    }
+    if (isClient) {
+      promises.push(api.getGoals());
+    }
+    Promise.all(promises)
+      .then(([e]) => { setExercises(e); })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { if (isClient || canViewClients) loadGoals(); }, [selectedUser]);
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -72,11 +96,23 @@ export default function Goals() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">🎯 Goals</h1>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">
-          {showForm ? 'Cancel' : '+ New Goal'}
-        </button>
+        <div className="flex items-center gap-2">
+          {canViewClients && (
+            <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} className="text-sm !py-1.5 w-auto">
+              <option value="">{user.role === 'superadmin' ? 'All users' : 'My clients'}</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.username}</option>
+              ))}
+            </select>
+          )}
+          {isClient && (
+            <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">
+              {showForm ? 'Cancel' : '+ New Goal'}
+            </button>
+          )}
+        </div>
       </div>
 
       {activeGoals.length > 0 && (

@@ -8,9 +8,7 @@ router.use(authenticate);
 
 function userFilter(req) {
   if (req.user.role === 'superadmin') return {};
-  if (req.user.role === 'admin') {
-    return { or: `user_id.eq.${req.user.id},user_id.in.(select id from profiles where admin_id = ${req.user.id})` };
-  }
+  if (req.user.role === 'admin') return {};
   return { user_id: req.user.id };
 }
 
@@ -53,6 +51,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
+  if (!['client', 'ghost'].includes(req.user.role)) return res.status(403).json({ error: 'Only clients can set goals' });
   const { exercise_id, target_weight, target_date, notes } = req.body;
   if (!exercise_id || !target_weight) return res.status(400).json({ error: 'exercise_id and target_weight are required' });
   const { data: exercise, error: checkErr } = await supabase.from('exercises').select('id').eq('id', exercise_id).maybeSingle();
@@ -61,8 +60,7 @@ router.post('/', async (req, res) => {
   const { data: goal, error } = await supabase
     .from('goals')
     .insert({ exercise_id, target_weight, target_date: target_date || null, notes: notes || null, user_id: req.user.id })
-    .select('*, exercises(name, muscle_group)')
-    .single();
+    .select('*, exercises(name, muscle_group)').single();
   if (error) throw error;
   const result = { ...goal, exercise_name: goal.exercises?.name, muscle_group: goal.exercises?.muscle_group, exercises: undefined };
   res.status(201).json(result);
@@ -73,7 +71,7 @@ router.put('/:id', async (req, res) => {
   const { data: existing, error: checkErr } = await supabase.from('goals').select('*').eq('id', req.params.id).maybeSingle();
   if (checkErr) throw checkErr;
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  if (existing.user_id !== req.user.id && req.user.role === 'client') return res.status(403).json({ error: 'Not your goal' });
+  if (existing.user_id !== req.user.id && !['superadmin', 'admin'].includes(req.user.role)) return res.status(403).json({ error: 'Not your goal' });
   const updates = {};
   if (target_weight !== undefined) updates.target_weight = target_weight;
   if (target_date !== undefined) updates.target_date = target_date;

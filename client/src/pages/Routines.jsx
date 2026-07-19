@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -49,12 +50,17 @@ function isSameDay(a, b) {
 }
 
 export default function Routines() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const routinesRef = useRef(null);
   const dateStripRef = useRef(null);
+  const isClient = user && (user.role === 'client' || user.role === 'ghost');
+  const canEdit = user && (user.role === 'superadmin' || user.role === 'admin');
   const [routines, setRoutines] = useState([]);
+  const [assignedRoutines, setAssignedRoutines] = useState([]);
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [routineTab, setRoutineTab] = useState('my');
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [showPicker, setShowPicker] = useState(false);
@@ -75,11 +81,15 @@ export default function Routines() {
 
   const selectedDayName = dayNames[selectedDate.getDay() === 0 ? 6 : selectedDate.getDay() - 1];
   const isToday = isSameDay(selectedDate, today);
-  const selectedRoutines = routines.filter(r => r.day_of_week === selectedDayName);
+  const pool = isClient && routineTab === 'assigned' ? assignedRoutines : routines;
+  const selectedRoutines = pool.filter(r => r.day_of_week === selectedDayName);
 
   function loadData() {
-    Promise.all([api.getRoutines(), api.getExercises()])
-      .then(([r, e]) => { setRoutines(r); setExercises(e); })
+    Promise.all([
+      api.getRoutines(),
+      api.getExercises(),
+      isClient ? api.request('/routines/assigned').catch(() => []) : [],
+    ]).then(([r, e, a]) => { setRoutines(r); setExercises(e); setAssignedRoutines(a || []); })
       .finally(() => setLoading(false));
   }
 
@@ -296,6 +306,22 @@ export default function Routines() {
     <div className="space-y-6" ref={routinesRef}>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">📋 Routines</h1>
+        {isClient && assignedRoutines.length > 0 && (
+          <div className="flex gap-1 bg-gray-800/50 rounded-lg p-0.5">
+            <button
+              onClick={() => setRoutineTab('my')}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${routineTab === 'my' ? 'bg-emerald-600/30 text-emerald-300' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              My Routines
+            </button>
+            <button
+              onClick={() => setRoutineTab('assigned')}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${routineTab === 'assigned' ? 'bg-emerald-600/30 text-emerald-300' : 'text-gray-400 hover:text-gray-200'}`}
+            >
+              Assigned
+            </button>
+          </div>
+        )}
       </div>
 
       {successMsg && (
@@ -418,7 +444,7 @@ export default function Routines() {
           className="flex items-center justify-between w-full text-left"
         >
           <span className="text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>
-            📋 All Routines ({routines.length})
+            📋 {isClient && routineTab === 'assigned' ? 'Assigned' : 'All'} Routines ({pool.length})
           </span>
           <span className="text-xs transition-transform" style={{ color: 'var(--text-dim)', transform: showAllRoutines ? 'rotate(180deg)' : '' }}>
             ▼
@@ -434,7 +460,7 @@ export default function Routines() {
                   <div>
                     <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Delete routine?</p>
                     <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
-                      "{routines.find(r => r.id === confirmDelete)?.name}" and all its data will be permanently removed.
+                      "{pool.find(r => r.id === confirmDelete)?.name}" and all its data will be permanently removed.
                     </p>
                   </div>
                 </div>
@@ -447,7 +473,7 @@ export default function Routines() {
 
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Manage Routines</h3>
-              {!showPicker && editing !== 'new' && !editing && (
+              {canEdit && !showPicker && editing !== 'new' && !editing && (
                 <button onClick={openCreate} className="btn-primary text-sm flex items-center gap-1">
                   <span>+</span> Create Routine
                 </button>
@@ -590,18 +616,18 @@ export default function Routines() {
               </form>
             )}
 
-            {!editing && !showPicker && routines.length === 0 && (
+            {!editing && !showPicker && pool.length === 0 && (
               <EmptyState
                 icon="📋"
-                title="No routines yet"
-                description="Create a routine to quickly log related exercises."
-                action={<button onClick={openCreate} className="btn-primary text-sm">Create Routine</button>}
+                title={isClient && routineTab === 'assigned' ? 'No assigned routines' : 'No routines yet'}
+                description={isClient && routineTab === 'assigned' ? 'Your admin has not assigned any routines yet.' : 'Create a routine to quickly log related exercises.'}
+                action={canEdit && routineTab !== 'assigned' ? <button onClick={openCreate} className="btn-primary text-sm">Create Routine</button> : null}
               />
             )}
 
-            {!editing && !showPicker && routines.length > 0 && (
+            {!editing && !showPicker && pool.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {routines.map((routine) => {
+                {pool.map((routine) => {
                   const routineExs = exercises.filter(e => routine.exercise_ids?.includes(e.id));
                   const grouped = {};
                   for (const ex of routineExs) {
@@ -631,12 +657,16 @@ export default function Routines() {
                               <button onClick={() => { handleStartRoutine(routine.id); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
                                 <span>▶</span> Start Workout
                               </button>
-                              <button onClick={() => { openEdit(routine); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-                                <span>✏️</span> Edit
-                              </button>
-                              <button onClick={() => { setConfirmDelete(routine.id); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm flex items-center gap-2" style={{ color: 'var(--text-red-400)' }}>
-                                <span>🗑️</span> Delete
-                              </button>
+                              {canEdit && (
+                                <button onClick={() => { openEdit(routine); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+                                  <span>✏️</span> Edit
+                                </button>
+                              )}
+                              {canEdit && (
+                                <button onClick={() => { setConfirmDelete(routine.id); setShowMenu(null); }} className="w-full text-left px-3 py-2 text-sm flex items-center gap-2" style={{ color: 'var(--text-red-400)' }}>
+                                  <span>🗑️</span> Delete
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -667,10 +697,12 @@ export default function Routines() {
                       </div>
 
                       <div className="mt-3 pt-3 border-t flex gap-2" style={{ borderColor: 'var(--border)' }}>
-                        <button onClick={() => handleStartRoutine(routine.id)} className="btn-primary text-xs flex-1 flex items-center justify-center gap-1">
-                          <span>▶</span> Start
-                        </button>
-                        <button onClick={() => openEdit(routine)} className="btn-secondary text-xs">Edit</button>
+                          <button onClick={() => handleStartRoutine(routine.id)} className="btn-primary text-xs flex-1 flex items-center justify-center gap-1">
+                            <span>▶</span> Start
+                          </button>
+                          {canEdit && (
+                            <button onClick={() => openEdit(routine)} className="btn-secondary text-xs">Edit</button>
+                          )}
                       </div>
                     </div>
                   );

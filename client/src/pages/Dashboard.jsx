@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import ProgressChart from '../components/ProgressChart';
 import AccumulatedProgressChart from '../components/AccumulatedProgressChart';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
+import AdminDashboard from './AdminDashboard';
+import OrgDashboard from './OrgDashboard';
 
 const hours = new Date().getHours();
 const timeGreeting = hours < 12 ? 'Good morning' : hours < 18 ? 'Good afternoon' : 'Good evening';
@@ -30,7 +33,12 @@ const muscleColors = {
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const navigate = useNavigate();
+
+  if (user?.role === 'superadmin') return <OrgDashboard />;
+  if (user?.role === 'admin') return <AdminDashboard />;
+
   const [loading, setLoading] = useState(true);
   const [todayLogs, setTodayLogs] = useState([]);
   const [monthLogs, setMonthLogs] = useState([]);
