@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { supabase } = require('../db');
+const { supabase, supabaseAuth } = require('../db');
 const { authenticate } = require('../middleware/auth');
 const router = Router();
 
@@ -24,7 +24,7 @@ router.post('/register', async (req, res) => {
 
   const email = usernameToEmail(username);
 
-  const { data: authUser, error: createErr } = await supabase.auth.admin.createUser({
+  const { data: authUser, error: createErr } = await supabaseAuth.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -45,7 +45,7 @@ router.post('/register', async (req, res) => {
     .from('profiles')
     .insert({ id: authUser.user.id, username, role, approved });
   if (profileErr) {
-    await supabase.auth.admin.deleteUser(authUser.user.id);
+    await supabaseAuth.auth.admin.deleteUser(authUser.user.id);
     throw profileErr;
   }
 
@@ -65,7 +65,7 @@ router.post('/login', async (req, res) => {
 
   const email = usernameToEmail(username);
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
   if (error) {
     return res.status(401).json({ error: 'Invalid username or password' });
   }
@@ -105,7 +105,7 @@ router.post('/google-setup', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'No token' });
   if (!username) return res.status(400).json({ error: 'Username is required' });
 
-  const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+  const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(token);
   if (authErr || !user) return res.status(401).json({ error: 'Invalid token' });
 
   const { data: existing } = await supabase

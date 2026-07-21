@@ -1,4 +1,4 @@
-const { supabase } = require('../db');
+const { supabase, supabaseAuth } = require('../db');
 
 async function authenticate(req, res, next) {
   const header = req.headers.authorization;
@@ -6,7 +6,7 @@ async function authenticate(req, res, next) {
     return res.status(401).json({ error: 'Missing or invalid authorization header' });
   }
   const token = header.split(' ')[1];
-  const { data: { user }, error } = await supabase.auth.getUser(token);
+  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
   if (error || !user) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
