@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+ import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { api } from '../api';
 
@@ -57,16 +57,28 @@ export function AuthProvider({ children }) {
     return data.user;
   }, []);
 
-  const register = useCallback(async (username, password, ghost) => {
+  // Superadmin: create org + account
+  const register = useCallback(async (username, password, ghost, orgName) => {
+    const body = { username, password, ghost: !!ghost };
+    if (orgName) body.org_name = orgName;
     const data = await api.request('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ username, password, ghost: !!ghost }),
+      body: JSON.stringify(body),
     });
     if (ghost) {
       return login(username, password);
     }
     return data;
   }, [login]);
+
+  // Client: join an existing org (pending approval)
+  const joinOrg = useCallback(async (username, password, orgName) => {
+    const data = await api.request('/auth/join', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, org_name: orgName }),
+    });
+    return data;
+  }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem('authSession');
@@ -99,7 +111,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, loginWithGoogle, setupGoogleUser, supabase }}>
+    <AuthContext.Provider value={{ user, loading, login, register, joinOrg, logout, loginWithGoogle, setupGoogleUser, supabase }}>
       {children}
     </AuthContext.Provider>
   );

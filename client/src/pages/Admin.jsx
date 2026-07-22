@@ -85,13 +85,20 @@ export default function Admin() {
   const isSuperadmin = user?.role === 'superadmin';
   const pending = users.filter(u => !u.approved && u.role === 'client');
   const admins = users.filter(u => u.role === 'admin');
-  const clients = users.filter(u => u.role !== 'superadmin' && u.role !== 'admin');
+  const clients = users.filter(u => u.role === 'client');
 
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">Admin Panel</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">Admin Panel</h1>
+        {user?.org_name && (
+          <span className="text-xs px-2 py-1 rounded-full bg-emerald-900/30 text-emerald-400 border border-emerald-800/40">
+            {user.org_name}
+          </span>
+        )}
+      </div>
 
       {message && (
         <div className="text-sm p-2 rounded" style={{ backgroundColor: 'rgba(16,185,129,0.2)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)' }}>
@@ -111,10 +118,6 @@ export default function Admin() {
             Pending ({pending.length})
           </button>
         )}
-        <button onClick={() => setTab('pending')} className={`text-sm px-3 py-1 rounded-t ${tab === 'pending' ? 'font-semibold' : ''}`}
-          style={tab === 'pending' ? { color: 'var(--text-secondary)', borderBottom: '2px solid #f59e0b' } : { color: 'var(--text-dim)' }}>
-          Pending {pending.length > 0 ? `(${pending.length})` : ''}
-        </button>
         <button onClick={() => setTab('create')} className={`text-sm px-3 py-1 rounded-t ${tab === 'create' ? 'font-semibold' : ''}`}
           style={tab === 'create' ? { color: 'var(--text-secondary)', borderBottom: '2px solid #34d399' } : { color: 'var(--text-dim)' }}>
           Create Client
@@ -145,9 +148,13 @@ export default function Admin() {
                   className="w-auto text-xs !py-1"
                 >
                   <option value="client">Client</option>
-                  <option value="ghost">Ghost</option>
                   <option value="admin">Admin</option>
                 </select>
+              )}
+              {isSuperadmin && u.role !== 'superadmin' && !u.approved && (
+                <button onClick={() => approveUser(u.id)} className="btn-primary text-xs !py-1.5 ml-2">
+                  Approve
+                </button>
               )}
             </div>
           ))}

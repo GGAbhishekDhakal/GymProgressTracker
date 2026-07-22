@@ -9,8 +9,9 @@ export default function Register() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
-  const [ghostMode, setGhostMode] = useState(false);
-  const { register } = useAuth();
+  const [mode, setMode] = useState('org'); // 'org' | 'ghost' | 'join'
+  const [orgName, setOrgName] = useState('');
+  const { register, joinOrg } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
@@ -21,11 +22,20 @@ export default function Register() {
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
     setBusy(true);
     try {
-      const result = await register(username, password, ghostMode);
-      if (ghostMode) {
+      if (mode === 'ghost') {
+        await register(username, password, true);
         navigate('/', { replace: true });
         return;
       }
+      if (mode === 'join') {
+        if (!orgName.trim()) { setError('Organization name is required'); setBusy(false); return; }
+        const result = await joinOrg(username, password, orgName.trim());
+        setSuccess(result.message || 'Account created!');
+        return;
+      }
+      // mode === 'org' → superadmin creating org
+      if (!orgName.trim()) { setError('Organization name is required'); setBusy(false); return; }
+      const result = await register(username, password, false, orgName.trim());
       setSuccess(result.message || 'Account created!');
     } catch (err) {
       setError(err.message);
@@ -59,6 +69,45 @@ export default function Register() {
 
         {!success && (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Mode selector */}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { key: 'org', label: 'Create Org', desc: 'New organization' },
+                { key: 'join', label: 'Join Org', desc: 'Join existing org' },
+                { key: 'ghost', label: 'Solo Mode', desc: 'No trainer' },
+              ].map(m => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setMode(m.key)}
+                  className={`text-center p-2 rounded-lg border text-xs transition-colors ${
+                    mode === m.key ? 'border-emerald-500/50 bg-emerald-900/20 text-emerald-400' : 'border-gray-700 text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <div className="font-medium">{m.label}</div>
+                  <div className="text-[10px] opacity-70">{m.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Org name field (org + join modes) */}
+            {mode !== 'ghost' && (
+              <div>
+                <label className="text-xs font-medium" style={{ color: 'var(--text-dim)' }}>
+                  {mode === 'org' ? 'Organization Name' : 'Organization to Join'}
+                </label>
+                <input
+                  type="text"
+                  value={orgName}
+                  onChange={e => setOrgName(e.target.value)}
+                  className="w-full !py-2 mt-1"
+                  placeholder={mode === 'org' ? 'e.g. Iron Paradise Gym' : 'Enter exact org name'}
+                  required
+                  autoFocus={mode !== 'ghost'}
+                />
+              </div>
+            )}
+
             <div>
               <label className="text-xs font-medium" style={{ color: 'var(--text-dim)' }}>Username</label>
               <input
@@ -69,7 +118,6 @@ export default function Register() {
                 placeholder="Choose a username"
                 required
                 minLength={3}
-                autoFocus
               />
             </div>
             <div>
@@ -95,21 +143,8 @@ export default function Register() {
                 required
               />
             </div>
-            <div
-              className="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors"
-              style={{ backgroundColor: ghostMode ? 'rgba(16,185,129,0.1)' : 'var(--bg-card-hover)', border: `1px solid ${ghostMode ? 'rgba(16,185,129,0.3)' : 'var(--border)'}` }}
-              onClick={() => setGhostMode(g => !g)}
-            >
-              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${ghostMode ? 'bg-emerald-600 border-emerald-500' : 'border-gray-500'}`}>
-                {ghostMode && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>👻 Solo Mode</p>
-                <p className="text-xs" style={{ color: 'var(--text-dim)' }}>No trainer? Start solo and track your own progress</p>
-              </div>
-            </div>
             <button type="submit" disabled={busy} className="btn-primary w-full !py-2.5">
-              {busy ? 'Creating...' : ghostMode ? 'Create Solo Account' : 'Create Account'}
+              {busy ? 'Creating...' : mode === 'org' ? 'Create Organization' : mode === 'join' ? 'Request to Join' : 'Create Solo Account'}
             </button>
           </form>
         )}

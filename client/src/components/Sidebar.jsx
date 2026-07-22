@@ -15,7 +15,7 @@ export default function Sidebar() {
     links = [
       { to: '/', label: 'Dashboard', icon: '📊' },
       { to: '/exercises', label: 'Exercises', icon: '🏋️' },
-      { to: '/clients', label: 'Clients', icon: '👥' },
+      { to: '/admin', label: 'Admin', icon: '👥' },
       { to: '/history', label: 'History', icon: '📜' },
     ];
   } else if (isAdmin) {
@@ -87,7 +87,7 @@ export default function Sidebar() {
       {isAuthed && !collapsed && (
         <div className="shrink-0 border-t px-3 py-2" style={{ borderColor: 'var(--border)' }}>
           <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{user.username}</div>
-          <div className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{user.role === 'ghost' ? 'ghost' : user.role}</div>
+          <div className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{user.role === 'ghost' ? 'Solo' : user.role}{user.org_name ? ` · ${user.org_name}` : ''}</div>
         </div>
       )}
 

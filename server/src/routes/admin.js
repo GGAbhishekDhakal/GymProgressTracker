@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { supabase } = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, requireOrg } = require('../middleware/auth');
 const router = Router();
 
 const EMAIL_DOMAIN = 'gt.local';
@@ -9,21 +9,23 @@ const EMAIL_DOMAIN = 'gt.local';
 router.use(authenticate);
 router.use(authorize('superadmin', 'admin'));
 
-// GET /api/admin/users — list users
-router.get('/users', async (req, res) => {
+// GET /api/admin/users — list users in same org
+router.get('/users', requireOrg, async (req, res) => {
   if (req.user.role === 'superadmin') {
     const { data: profiles, error } = await supabase
       .from('profiles')
       .select('*')
+      .eq('org_id', req.user.org_id)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return res.json(profiles);
   }
 
-  // Admin: own profile + their clients + pending unassigned clients
+  // Admin: own profile + their clients in same org + pending unassigned clients in same org
   const { data: profiles, error } = await supabase
     .from('profiles')
     .select('*')
+    .eq('org_id', req.user.org_id)
     .or(`id.eq.${req.user.id},admin_id.eq.${req.user.id},and(role.eq.client,admin_id.is.null,approved.eq.false)`)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -31,7 +33,7 @@ router.get('/users', async (req, res) => {
 });
 
 // PUT /api/admin/users/:id/approve — approve a client
-router.put('/users/:id/approve', async (req, res) => {
+router.put('/users/:id/approve', requireOrg, async (req, res) => {
   const userId = req.params.id;
 
   const { data: target, error: fetchErr } = await supabase
@@ -41,6 +43,9 @@ router.put('/users/:id/approve', async (req, res) => {
     .single();
   if (fetchErr || !target) return res.status(404).json({ error: 'User not found' });
 
+  if (target.org_id !== req.user.org_id) {
+    return res.status(403).json({ error: 'User not in your organization' });
+  }
   if (target.role !== 'client') {
     return res.status(400).json({ error: 'Only client accounts can be approved' });
   }
@@ -50,15 +55,15 @@ router.put('/users/:id/approve', async (req, res) => {
 
   const { error: updErr } = await supabase
     .from('profiles')
-    .update({ approved: true, admin_id: req.user.id })
+    .update({ approved: true, admin_id: req.user.role === 'admin' ? req.user.id : target.admin_id })
     .eq('id', userId);
   if (updErr) throw updErr;
 
-  res.json({ message: 'Client approved and assigned to you' });
+  res.json({ message: 'Client approved' });
 });
 
-// POST /api/admin/users/create-client — admin creates a client account
-router.post('/users/create-client', async (req, res) => {
+// POST /api/admin/users/create-client — create a client account in this org
+router.post('/users/create-client', requireOrg, async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
@@ -88,7 +93,8 @@ router.post('/users/create-client', async (req, res) => {
       id: authUser.user.id,
       username,
       role: 'client',
-      admin_id: req.user.id,
+      org_id: req.user.org_id,
+      admin_id: req.user.role === 'admin' ? req.user.id : null,
       approved: true,
     });
   if (profileErr) {
@@ -99,8 +105,8 @@ router.post('/users/create-client', async (req, res) => {
   res.status(201).json({ message: 'Client account created successfully' });
 });
 
-// POST /api/admin/users/create-admin — superadmin creates an admin account
-router.post('/users/create-admin', authorize('superadmin'), async (req, res) => {
+// POST /api/admin/users/create-admin — superadmin creates an admin in this org
+router.post('/users/create-admin', authorize('superadmin'), requireOrg, async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
@@ -130,6 +136,7 @@ router.post('/users/create-admin', authorize('superadmin'), async (req, res) => 
       id: authUser.user.id,
       username,
       role: 'admin',
+      org_id: req.user.org_id,
       approved: true,
     });
   if (profileErr) {
@@ -140,11 +147,21 @@ router.post('/users/create-admin', authorize('superadmin'), async (req, res) => 
   res.status(201).json({ message: 'Admin account created successfully' });
 });
 
-// PUT /api/admin/users/:id/role — superadmin only: change user role
-router.put('/users/:id/role', authorize('superadmin'), async (req, res) => {
+// PUT /api/admin/users/:id/role — superadmin only: change user role (within same org)
+router.put('/users/:id/role', authorize('superadmin'), requireOrg, async (req, res) => {
   const { role } = req.body;
   if (!['superadmin', 'admin', 'client', 'ghost'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  const { data: target } = await supabase
+    .from('profiles')
+    .select('org_id')
+    .eq('id', req.params.id)
+    .maybeSingle();
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (target.org_id !== req.user.org_id) {
+    return res.status(403).json({ error: 'User not in your organization' });
   }
 
   const { error } = await supabase

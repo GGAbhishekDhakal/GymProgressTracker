@@ -62,6 +62,8 @@ const exercises = [
   { name: 'Side Plank', muscle_group: 'Core', category: 'Bodyweight' },
 ];
 
+const EMAIL_DOMAIN = 'gt.local';
+
 async function seed() {
   const { count, error } = await supabase
     .from('exercises')
@@ -70,20 +72,82 @@ async function seed() {
   if (error) throw error;
 
   if (count > 0) {
-    console.log('Database already seeded — skipping.');
-    return;
+    console.log(`Database already seeded (${count} exercises) — skipping.`);
+  } else {
+    const { error: insErr } = await supabase
+      .from('exercises')
+      .insert(exercises);
+    if (insErr) throw insErr;
+    console.log(`Seeded ${exercises.length} exercises.`);
   }
 
-  const { error: insErr } = await supabase
-    .from('exercises')
-    .insert(exercises);
+  // Create test superadmin + org if env vars set
+  const testUsername = process.env.SEED_ADMIN_USERNAME;
+  const testPassword = process.env.SEED_ADMIN_PASSWORD;
+  const testOrg = process.env.SEED_ORG_NAME || 'Test Gym';
 
-  if (insErr) throw insErr;
+  if (testUsername && testPassword) {
+    const email = `${testUsername}@${EMAIL_DOMAIN}`;
 
-  console.log(`Seeded ${exercises.length} exercises.`);
+    // Check if org exists
+    const { data: existingOrg } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('name', testOrg)
+      .maybeSingle();
+
+    if (existingOrg) {
+      console.log(`Organization "${testOrg}" already exists — skipping admin seed.`);
+      return;
+    }
+
+    // Create auth user
+    const { data: authUser, error: createErr } = await supabase.auth.admin.createUser({
+      email,
+      password: testPassword,
+      email_confirm: true,
+      user_metadata: { username: testUsername },
+    });
+    if (createErr) {
+      if (createErr.message?.includes('already exists')) {
+        console.log(`User ${testUsername} already exists — skipping.`);
+        return;
+      }
+      throw createErr;
+    }
+
+    // Create superadmin profile first (needed for organizations.created_by FK)
+    const { error: profileErr } = await supabase
+      .from('profiles')
+      .insert({
+        id: authUser.user.id,
+        username: testUsername,
+        role: 'superadmin',
+        approved: true,
+      });
+    if (profileErr) throw profileErr;
+
+    // Create org
+    const { data: org, error: orgErr } = await supabase
+      .from('organizations')
+      .insert({ name: testOrg, created_by: authUser.user.id })
+      .select()
+      .single();
+    if (orgErr) throw orgErr;
+
+    // Update profile with org_id
+    const { error: updErr } = await supabase
+      .from('profiles')
+      .update({ org_id: org.id })
+      .eq('id', authUser.user.id);
+    if (updErr) throw updErr;
+
+    console.log(`Created superadmin "${testUsername}" in org "${testOrg}"`);
+  }
 }
 
 seed().catch(err => {
   console.error('Seed failed:', err);
   process.exit(1);
 });
+ç
