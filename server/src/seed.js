@@ -8,7 +8,7 @@ const exercises = [
   { name: 'Dumbbell Flyes', muscle_group: 'Chest', category: 'Dumbbell' },
   { name: 'Cable Crossover', muscle_group: 'Chest', category: 'Cable' },
   { name: 'Push-ups', muscle_group: 'Chest', category: 'Bodyweight' },
-  { name: 'Chest Press Machine', muscle_group: 'Chest', category: 'Machine' },
+  { name: 'Chest Press Machine', muscle_group: 'Chest',  category: 'Machine' },
   { name: 'Pec Deck Fly', muscle_group: 'Chest', category: 'Machine' },
 
   { name: 'Deadlift', muscle_group: 'Back', category: 'Barbell' },
