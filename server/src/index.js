@@ -17,6 +17,7 @@ const authRouter = require('./routes/auth');
 const adminRouter = require('./routes/admin');
 const assignmentsRouter = require('./routes/assignments');
 const orgRouter = require('./routes/org');
+const orgProfileRouter = require('./routes/orgProfile');
 const profilesRouter = require('./routes/profiles');
 
 const app = express();
@@ -56,6 +57,7 @@ app.use('/api/targets', targetsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/assignments', assignmentsRouter);
 app.use('/api/org', orgRouter);
+app.use('/api/org-profile', orgProfileRouter);
 app.use('/api/profiles', profilesRouter);
 
 app.get('/api/stats', authenticate, async (req, res) => {

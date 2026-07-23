@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function KYC() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [status, setStatus] = useState(null);
+
+  const isSuperadmin = user?.role === 'superadmin';
 
   const [form, setForm] = useState({
     kyc_full_name: '',
@@ -80,6 +85,15 @@ export default function KYC() {
         <div className={`text-sm font-medium ${s.color}`}>Status: {s.label}</div>
         {status === 'verified' && <span className="text-emerald-400">✓</span>}
       </div>
+
+      {isSuperadmin && (
+        <div className="card !p-3 border" style={{ borderColor: 'var(--border)' }}>
+          <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
+            This is your <strong>personal</strong> KYC. For your organization's business verification, go to{' '}
+            <Link to="/org-profile" className="text-emerald-400 hover:text-emerald-300 underline">Org Profile → Business KYC</Link>.
+          </p>
+        </div>
+      )}
 
       {message && (
         <div className="text-sm p-2 rounded bg-emerald-900/30 text-emerald-400 border border-emerald-800/40 text-center">

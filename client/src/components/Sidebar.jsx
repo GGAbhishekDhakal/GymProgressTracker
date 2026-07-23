@@ -41,6 +41,7 @@ export default function Sidebar() {
   const accountLinks = [
     { to: '/profile', label: 'Profile', icon: '👤' },
     { to: '/kyc', label: 'KYC', icon: '🪪' },
+    ...(isSuperadmin ? [{ to: '/org-profile', label: 'Org Profile', icon: '🏢' }] : []),
   ];
 
   function navClass({ isActive }) {

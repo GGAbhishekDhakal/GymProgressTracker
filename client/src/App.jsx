@@ -17,6 +17,7 @@ import AdminAssign from './pages/AdminAssign';
 import OrgDashboard from './pages/OrgDashboard';
 import Profile from './pages/Profile';
 import KYC from './pages/KYC';
+import OrgProfile from './pages/OrgProfile';
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
               <Route path="/clients" element={<Layout><ProtectedRoute roles={['superadmin']}><Admin /></ProtectedRoute></Layout>} />
               <Route path="/profile" element={<Layout><ProtectedRoute><Profile /></ProtectedRoute></Layout>} />
               <Route path="/kyc" element={<Layout><ProtectedRoute><KYC /></ProtectedRoute></Layout>} />
+              <Route path="/org-profile" element={<Layout><ProtectedRoute roles={['superadmin']}><OrgProfile /></ProtectedRoute></Layout>} />
             </Routes>
         </AuthProvider>
       </ThemeProvider>
