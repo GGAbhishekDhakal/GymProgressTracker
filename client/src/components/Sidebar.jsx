@@ -38,6 +38,11 @@ export default function Sidebar() {
     ];
   }
 
+  const accountLinks = [
+    { to: '/profile', label: 'Profile', icon: '👤' },
+    { to: '/kyc', label: 'KYC', icon: '🪪' },
+  ];
+
   function navClass({ isActive }) {
     const base = 'flex items-center gap-3 rounded-lg transition-all duration-200 ';
     const activeStyle = isActive
@@ -77,6 +82,13 @@ export default function Sidebar() {
         <nav className="flex-1 flex flex-col gap-0.5 py-2 overflow-y-auto">
           {links.map(({ to, label, icon }) => (
             <NavLink key={to} to={to} end={to === '/'} className={navClass}>
+              <span className="text-lg shrink-0">{icon}</span>
+              {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
+            </NavLink>
+          ))}
+          <div className="my-1 mx-2 border-t" style={{ borderColor: 'var(--border)' }} />
+          {accountLinks.map(({ to, label, icon }) => (
+            <NavLink key={to} to={to} className={navClass}>
               <span className="text-lg shrink-0">{icon}</span>
               {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
             </NavLink>

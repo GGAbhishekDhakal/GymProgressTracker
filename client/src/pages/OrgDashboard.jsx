@@ -112,21 +112,90 @@ function UserList() {
 
   if (loading) return <LoadingSpinner />;
 
+  const superadmin = users.filter(u => u.role === 'superadmin');
+  const admins = users.filter(u => u.role === 'admin');
+  const unassignedClients = users.filter(u => u.role === 'client' && !u.admin_id && u.approved);
+  const pendingClients = users.filter(u => u.role === 'client' && !u.approved);
+  const ghosts = users.filter(u => u.role === 'ghost');
+
+  const adminGroups = admins.map(admin => ({
+    ...admin,
+    clients: users.filter(u => u.admin_id === admin.id && u.role === 'client' && u.approved),
+  }));
+
   return (
-    <div className="space-y-1">
-      {users.map(u => (
-        <div key={u.id} className="flex items-center justify-between !p-2 rounded" style={{ backgroundColor: 'var(--bg-card-hover)' }}>
+    <div className="space-y-3">
+      {superadmin.map(u => (
+        <div key={u.id} className="flex items-center justify-between !p-2.5 rounded-lg" style={{ backgroundColor: 'var(--bg-card-hover)' }}>
           <div className="flex items-center gap-2">
-            <span className="text-sm">{u.username}</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${
-              u.role === 'superadmin' ? 'bg-purple-900/40 text-purple-400' :
-              u.role === 'admin' ? 'bg-blue-900/40 text-blue-400' :
-              u.role === 'ghost' ? 'bg-indigo-900/40 text-indigo-400' : 'bg-gray-800 text-gray-400'
-            }`}>{u.role}</span>
-            {!u.approved && <span className="text-xs text-yellow-400">(pending)</span>}
+            <span className="text-sm font-medium">{u.username}</span>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-400">superadmin</span>
           </div>
         </div>
       ))}
+
+      {adminGroups.map(admin => (
+        <div key={admin.id} className="!p-2.5 rounded-lg space-y-1" style={{ backgroundColor: 'var(--bg-card-hover)' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">{admin.username}</span>
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400">admin</span>
+            </div>
+            <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{admin.clients.length} clients</span>
+          </div>
+          {admin.clients.length > 0 && (
+            <div className="pl-4 space-y-0.5">
+              {admin.clients.map(c => (
+                <div key={c.id} className="flex items-center justify-between text-xs py-0.5" style={{ color: 'var(--text-dim)' }}>
+                  <span>{c.username}</span>
+                  {c.full_name && <span className="opacity-60">{c.full_name}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {unassignedClients.length > 0 && (
+        <div className="!p-2.5 rounded-lg" style={{ backgroundColor: 'var(--bg-card-hover)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium" style={{ color: 'var(--text-dim)' }}>Unassigned Clients</span>
+            <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{unassignedClients.length}</span>
+          </div>
+          <div className="pl-4 space-y-0.5">
+            {unassignedClients.map(c => (
+              <div key={c.id} className="text-xs py-0.5" style={{ color: 'var(--text-dim)' }}>{c.username}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pendingClients.length > 0 && (
+        <div className="!p-2.5 rounded-lg" style={{ backgroundColor: 'var(--bg-card-hover)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-yellow-400">Pending Approval</span>
+            <span className="text-xs text-yellow-400">{pendingClients.length}</span>
+          </div>
+          <div className="pl-4 space-y-0.5">
+            {pendingClients.map(c => (
+              <div key={c.id} className="text-xs py-0.5" style={{ color: 'var(--text-dim)' }}>{c.username}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {ghosts.length > 0 && (
+        <div className="!p-2.5 rounded-lg" style={{ backgroundColor: 'var(--bg-card-hover)' }}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Solo (Ghost) Users</span>
+            <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{ghosts.length}</span>
+          </div>
+        </div>
+      )}
+
+      {users.length === 0 && (
+        <p className="text-sm text-center py-4" style={{ color: 'var(--text-dim)' }}>No users found</p>
+      )}
     </div>
   );
 }
