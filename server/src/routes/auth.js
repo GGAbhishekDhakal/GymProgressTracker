@@ -195,7 +195,7 @@ router.post('/login', async (req, res) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*, organizations(name)')
+    .select('*, organizations!profiles_org_id_fkey(name)')
     .eq('id', data.user.id)
     .maybeSingle();
 
