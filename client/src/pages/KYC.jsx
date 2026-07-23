@@ -77,6 +77,24 @@ export default function KYC() {
 
   const s = statusConfig[status] || statusConfig.none;
 
+  if (isSuperadmin) {
+    return (
+      <div className="space-y-4 max-w-2xl">
+        <h1 className="text-xl font-bold">KYC Verification</h1>
+        <div className="card !p-6 text-center space-y-4">
+          <div className="text-4xl">🏢</div>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Organization Owner</h2>
+          <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
+            As the organization owner, your identity is verified through your organization's business KYC.
+          </p>
+          <Link to="/org-profile" className="btn-primary inline-block text-sm !py-2 !px-4">
+            Go to Org Settings
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 max-w-2xl">
       <h1 className="text-xl font-bold">KYC Verification</h1>

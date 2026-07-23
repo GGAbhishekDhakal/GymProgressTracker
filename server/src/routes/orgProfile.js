@@ -94,7 +94,31 @@ router.post('/kyc', async (req, res) => {
   res.json({ message: 'Organization KYC submitted for review' });
 });
 
-// GET /api/org/kyc — get org KYC status
+// PUT /api/org-profile/kyc/approve — superadmin self-approves org KYC
+router.put('/kyc/approve', async (req, res) => {
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('kyc_status')
+    .eq('id', req.user.org_id)
+    .maybeSingle();
+  if (!org) return res.status(404).json({ error: 'Organization not found' });
+  if (org.kyc_status !== 'pending') {
+    return res.status(400).json({ error: 'No pending KYC to approve' });
+  }
+
+  const { error } = await supabase
+    .from('organizations')
+    .update({
+      kyc_status: 'verified',
+      kyc_verified_at: new Date().toISOString(),
+    })
+    .eq('id', req.user.org_id);
+  if (error) throw error;
+
+  res.json({ message: 'Organization KYC verified' });
+});
+
+// GET /api/org-profile/kyc — get org KYC status
 router.get('/kyc', async (req, res) => {
   const { data, error } = await supabase
     .from('organizations')

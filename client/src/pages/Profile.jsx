@@ -108,6 +108,16 @@ export default function Profile() {
     setSaving(false);
   }
 
+  const isSuperadmin = user?.role === 'superadmin';
+
+  const tabs = [
+    { key: 'profile', label: 'Profile' },
+    ...(!isSuperadmin ? [{ key: 'gym', label: 'Gym Stats' }] : []),
+    { key: 'security', label: 'Security' },
+  ];
+
+  if (!tabs.find(t => t.key === tab)) setTab('profile');
+
   if (loading) return <LoadingSpinner />;
 
   const inputClass = 'w-full !py-2 mt-1';
@@ -116,7 +126,7 @@ export default function Profile() {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <h1 className="text-xl font-bold">My Profile</h1>
+      <h1 className="text-xl font-bold">{isSuperadmin ? 'My Profile' : 'My Profile'}</h1>
 
       {message && (
         <div className="text-sm p-2 rounded bg-emerald-900/30 text-emerald-400 border border-emerald-800/40 text-center">
@@ -132,11 +142,7 @@ export default function Profile() {
       )}
 
       <div className="flex gap-2 border-b pb-2 flex-wrap" style={{ borderColor: 'var(--border)' }}>
-        {[
-          { key: 'profile', label: 'Profile' },
-          { key: 'gym', label: 'Gym Stats' },
-          { key: 'security', label: 'Security' },
-        ].map(t => (
+        {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`text-sm px-3 py-1 rounded-t ${tab === t.key ? 'font-semibold' : ''}`}
             style={tab === t.key ? { color: 'var(--text-secondary)', borderBottom: '2px solid #34d399' } : { color: 'var(--text-dim)' }}>

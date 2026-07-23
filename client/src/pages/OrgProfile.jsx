@@ -91,6 +91,20 @@ export default function OrgProfile() {
     setSaving(false);
   }
 
+  async function approveKYC() {
+    setError('');
+    setMessage('');
+    setSaving(true);
+    try {
+      const data = await api.request('/org-profile/kyc/approve', { method: 'PUT' });
+      setMessage(data.message);
+      setKycStatus('verified');
+    } catch (err) {
+      setError(err.message);
+    }
+    setSaving(false);
+  }
+
   if (loading) return <LoadingSpinner />;
 
   const inputClass = 'w-full !py-2 mt-1';
@@ -276,10 +290,13 @@ export default function OrgProfile() {
           {kycStatus === 'pending' && (
             <div className="card !p-4 text-center space-y-3">
               <div className="text-3xl">⏳</div>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Under Review</h2>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Pending Verification</h2>
               <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
-                Your business KYC is being reviewed. This usually takes 2-3 business days.
+                Business KYC has been submitted. As the organization owner, you can approve it now.
               </p>
+              <button onClick={approveKYC} disabled={saving} className="btn-primary text-sm !py-2 !px-6">
+                {saving ? 'Approving...' : 'Approve Business KYC'}
+              </button>
             </div>
           )}
 
