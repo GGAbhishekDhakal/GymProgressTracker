@@ -195,7 +195,7 @@ router.post('/login', async (req, res) => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*, organizations!profiles_org_id_fkey(name)')
+    .select('*')
     .eq('id', data.user.id)
     .maybeSingle();
 
@@ -210,9 +210,16 @@ router.post('/login', async (req, res) => {
     });
   }
 
-  // Flatten org name onto profile
-  const orgName = profile.organizations?.name || null;
-  delete profile.organizations;
+  // Manual join for org name
+  let orgName = null;
+  if (profile.org_id) {
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', profile.org_id)
+      .maybeSingle();
+    orgName = org?.name || null;
+  }
   profile.org_name = orgName;
 
   res.json({

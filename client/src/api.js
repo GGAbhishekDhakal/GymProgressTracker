@@ -25,9 +25,33 @@ async function request(url, options = {}) {
   return res.json();
 }
 
+async function upload(url, file, path) {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (path) formData.append('path', path);
+  const headers = {};
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const res = await fetch(`${BASE}${url}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Upload failed' }));
+    if (res.status === 401) {
+      localStorage.removeItem('authSession');
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
+    throw new Error(error.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export const api = {
   request,
   setToken,
+  upload,
 
   // Exercises
   getExercises: (params) => { const q = new URLSearchParams(params).toString(); return request(`/exercises${q ? `?${q}` : ''}`); },

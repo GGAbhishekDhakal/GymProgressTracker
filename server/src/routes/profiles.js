@@ -1,22 +1,40 @@
 const { Router } = require('express');
+const multer = require('multer');
 const { supabase, supabaseAuth } = require('../db');
 const { authenticate } = require('../middleware/auth');
 
 const router = Router();
 router.use(authenticate);
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('File type not allowed. Use JPG, PNG, WebP, or PDF.'));
+  },
+});
+
 // GET /api/profiles/me
 router.get('/me', async (req, res) => {
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('*, organizations(name)')
+    .select('*')
     .eq('id', req.user.id)
     .maybeSingle();
   if (error) throw error;
   if (!profile) return res.status(404).json({ error: 'Profile not found' });
 
-  const orgName = profile.organizations?.name || null;
-  delete profile.organizations;
+  let orgName = null;
+  if (profile.org_id) {
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', profile.org_id)
+      .maybeSingle();
+    orgName = org?.name || null;
+  }
   profile.org_name = orgName;
 
   res.json(profile);
@@ -27,7 +45,13 @@ router.put('/me', async (req, res) => {
   const allowed = ['full_name', 'phone', 'bio', 'height', 'weight', 'date_of_birth', 'gender', 'fitness_level', 'fitness_goals'];
   const updates = {};
   for (const key of allowed) {
-    if (req.body[key] !== undefined) updates[key] = req.body[key];
+    if (req.body[key] !== undefined) {
+      if (key === 'date_of_birth' && req.body[key] === '') {
+        updates[key] = null;
+      } else {
+        updates[key] = req.body[key];
+      }
+    }
   }
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'No valid fields to update' });
@@ -88,8 +112,8 @@ router.put('/me/password', async (req, res) => {
 
 // POST /api/profiles/me/kyc — submit KYC
 router.post('/me/kyc', async (req, res) => {
-  if (req.user.kyc_status === 'pending' || req.user.kyc_status === 'verified') {
-    return res.status(400).json({ error: `KYC already ${req.user.kyc_status}` });
+  if (req.user.kyc_status === 'verified') {
+    return res.status(400).json({ error: 'KYC already verified' });
   }
 
   const { kyc_full_name, kyc_dob, kyc_address, kyc_id_type, kyc_id_number } = req.body;
@@ -115,19 +139,32 @@ router.post('/me/kyc', async (req, res) => {
 });
 
 // POST /api/profiles/me/kyc/documents — upload KYC documents
-router.post('/me/kyc/documents', async (req, res) => {
+router.post('/me/kyc/documents', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
   const { file_type } = req.body;
   const validTypes = ['kyc_id_front', 'kyc_id_back', 'kyc_selfie'];
   if (!validTypes.includes(file_type)) {
     return res.status(400).json({ error: 'Invalid file_type. Use: kyc_id_front, kyc_id_back, kyc_selfie' });
   }
 
-  // For now return upload instructions — Supabase Storage handles actual upload
-  res.json({
-    message: 'Use Supabase Storage directly to upload, then PATCH profile with the URL',
-    bucket: 'kyc-documents',
-    path: `${req.user.id}/${file_type}`,
-  });
+  const ext = req.file.originalname.split('.').pop();
+  const path = `${req.user.id}/${file_type}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from('kyc-documents')
+    .upload(path, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+  if (upErr) throw upErr;
+
+  const { data: urlData } = supabase.storage.from('kyc-documents').getPublicUrl(path);
+
+  const colMap = { kyc_id_front: 'kyc_id_front_url', kyc_id_back: 'kyc_id_back_url', kyc_selfie: 'kyc_selfie_url' };
+  const { error: dbErr } = await supabase
+    .from('profiles')
+    .update({ [colMap[file_type]]: urlData.publicUrl })
+    .eq('id', req.user.id);
+  if (dbErr) throw dbErr;
+
+  res.json({ url: urlData.publicUrl, path });
 });
 
 // GET /api/profiles/me/kyc — get KYC status

@@ -17,32 +17,35 @@ export function AuthProvider({ children }) {
     const stored = localStorage.getItem('authSession');
     if (stored) {
       const session = JSON.parse(stored);
-      setUser(session.user);
       api.setToken(session.session.access_token);
+      fetchProfile();
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         localStorage.setItem('authSession', JSON.stringify({ user: { id: session.user.id, email: session.user.email }, session }));
         api.setToken(session.access_token);
-        fetchProfile(session.access_token);
+        fetchProfile();
       } else {
         localStorage.removeItem('authSession');
         api.setToken(null);
         setUser(null);
+        setLoading(false);
       }
     });
     return () => listener?.subscription?.unsubscribe();
   }, []);
 
-  async function fetchProfile(token) {
+  async function fetchProfile() {
     try {
       const data = await api.request('/auth/me');
       setUser(data.user);
     } catch {
       setUser(null);
     }
+    setLoading(false);
   }
 
   const login = useCallback(async (username, password) => {
@@ -51,8 +54,8 @@ export function AuthProvider({ children }) {
       body: JSON.stringify({ username, password }),
     });
     if (data.pending) throw new Error(data.error);
-    localStorage.setItem('authSession', JSON.stringify({ user: data.user, session: data.session }));
     api.setToken(data.session.access_token);
+    localStorage.setItem('authSession', JSON.stringify({ user: data.user, session: data.session }));
     setUser(data.user);
     return data.user;
   }, []);
@@ -111,7 +114,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, joinOrg, logout, loginWithGoogle, setupGoogleUser, supabase }}>
+    <AuthContext.Provider value={{ user, setUser, loading, login, register, joinOrg, logout, loginWithGoogle, setupGoogleUser, supabase }}>
       {children}
     </AuthContext.Provider>
   );

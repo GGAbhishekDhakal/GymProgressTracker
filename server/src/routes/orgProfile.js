@@ -1,7 +1,18 @@
 const { Router } = require('express');
+const multer = require('multer');
 const { supabase } = require('../db');
 const { authenticate, authorize, requireOrg } = require('../middleware/auth');
 const router = Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('File type not allowed. Use JPG, PNG, WebP, or PDF.'));
+  },
+});
 
 router.use(authenticate);
 router.use(authorize('superadmin'));
@@ -60,14 +71,15 @@ router.post('/kyc', async (req, res) => {
     .select('kyc_status')
     .eq('id', req.user.org_id)
     .maybeSingle();
-  if (org.data?.kyc_status === 'pending' || org.data?.kyc_status === 'verified') {
-    return res.status(400).json({ error: `KYC already ${org.data.kyc_status}` });
+  if (org.data?.kyc_status === 'verified') {
+    return res.status(400).json({ error: 'KYC already verified' });
   }
 
   const {
     kyc_business_name, kyc_registration_number, kyc_tax_id,
     kyc_business_type, kyc_business_address, kyc_contact_person,
     kyc_contact_email, kyc_contact_phone,
+    kyc_reg_doc_url, kyc_tax_doc_url,
   } = req.body;
 
   if (!kyc_business_name || !kyc_registration_number || !kyc_tax_id || !kyc_business_type) {
@@ -86,6 +98,8 @@ router.post('/kyc', async (req, res) => {
       kyc_contact_person: kyc_contact_person || null,
       kyc_contact_email: kyc_contact_email || null,
       kyc_contact_phone: kyc_contact_phone || null,
+      kyc_registration_doc_url: kyc_reg_doc_url || null,
+      kyc_tax_doc_url: kyc_tax_doc_url || null,
       kyc_submitted_at: new Date().toISOString(),
     })
     .eq('id', req.user.org_id);
@@ -122,11 +136,46 @@ router.put('/kyc/approve', async (req, res) => {
 router.get('/kyc', async (req, res) => {
   const { data, error } = await supabase
     .from('organizations')
-    .select('kyc_status, kyc_business_name, kyc_registration_number, kyc_tax_id, kyc_business_type, kyc_business_address, kyc_contact_person, kyc_contact_email, kyc_contact_phone, kyc_submitted_at, kyc_verified_at')
+    .select('kyc_status, kyc_business_name, kyc_registration_number, kyc_tax_id, kyc_business_type, kyc_business_address, kyc_contact_person, kyc_contact_email, kyc_contact_phone, kyc_registration_doc_url, kyc_tax_doc_url, kyc_submitted_at, kyc_verified_at')
     .eq('id', req.user.org_id)
     .maybeSingle();
   if (error) throw error;
   res.json(data);
+});
+
+// POST /api/org-profile/logo — upload org logo
+router.post('/logo', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const path = req.body.path || `${req.user.org_id}/logo.${req.file.originalname.split('.').pop()}`;
+  const { error: upErr } = await supabase.storage
+    .from('org-assets')
+    .upload(path, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+  if (upErr) throw upErr;
+
+  const { data: urlData } = supabase.storage.from('org-assets').getPublicUrl(path);
+
+  const { error: dbErr } = await supabase
+    .from('organizations')
+    .update({ logo_url: urlData.publicUrl })
+    .eq('id', req.user.org_id);
+  if (dbErr) throw dbErr;
+
+  res.json({ url: urlData.publicUrl, path });
+});
+
+// POST /api/org-profile/kyc/document — upload KYC document
+router.post('/kyc/document', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const path = req.body.path || `${req.user.org_id}/kyc/${Date.now()}_${req.file.originalname}`;
+  const { error: upErr } = await supabase.storage
+    .from('org-assets')
+    .upload(path, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+  if (upErr) throw upErr;
+
+  const { data: urlData } = supabase.storage.from('org-assets').getPublicUrl(path);
+  res.json({ url: urlData.publicUrl, path });
 });
 
 module.exports = router;
