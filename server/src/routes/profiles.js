@@ -90,6 +90,7 @@ router.put('/me/username', async (req, res) => {
 
   const { error: authErr } = await supabase.auth.admin.updateUserById(req.user.id, {
     email: newEmail,
+    email_confirm: true,
   });
   if (authErr) {
     if (authErr.message?.includes('already exists') || authErr.message?.includes('already been registered')) {
