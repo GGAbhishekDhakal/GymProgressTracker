@@ -86,6 +86,18 @@ router.put('/me/username', async (req, res) => {
     return res.status(409).json({ error: 'Username already taken' });
   }
 
+  const newEmail = `${username}@${process.env.EMAIL_DOMAIN || 'gt.local'}`;
+
+  const { error: authErr } = await supabase.auth.admin.updateUserById(req.user.id, {
+    email: newEmail,
+  });
+  if (authErr) {
+    if (authErr.message?.includes('already exists') || authErr.message?.includes('already been registered')) {
+      return res.status(409).json({ error: 'Username already taken' });
+    }
+    throw authErr;
+  }
+
   const { error } = await supabase
     .from('profiles')
     .update({ username })
